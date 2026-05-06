@@ -138,6 +138,7 @@ For `openai-codex/*`, OCLite also supports the OpenAI Codex/ChatGPT subscription
 
 - PKCE browser login through `https://auth.openai.com/oauth/authorize`
 - local callback on `http://127.0.0.1:1455/auth/callback`
+- scope: `openid profile email offline_access`
 - token exchange through `https://auth.openai.com/oauth/token`
 - profile storage in `~/.oclite/auth-profiles.json`
 - automatic refresh when an OAuth profile expires

@@ -18,7 +18,6 @@ OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
 OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 OPENAI_CODEX_REDIRECT_URI = "http://127.0.0.1:1455/auth/callback"
 OPENAI_CODEX_SCOPE = "openid profile email offline_access"
-OPENAI_CODEX_AUDIENCE = "https://api.openai.com/v1"
 
 
 class OAuthError(RuntimeError):
@@ -110,7 +109,6 @@ def start_openai_codex_oauth(home: Path, profile_id: str = "default") -> dict[st
         "state": state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
-        "audience": OPENAI_CODEX_AUDIENCE,
     }
     ensure_callback_server(home)
     return {
@@ -214,4 +212,3 @@ def ensure_callback_server(home: Path) -> None:
     thread = threading.Thread(target=server.serve_forever, name="oauth-callback", daemon=True)
     thread.start()
     _callback_server_started = True
-
