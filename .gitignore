@@ -1,0 +1,5 @@
+.oclite/
+__pycache__/
+*.pyc
+.env
+

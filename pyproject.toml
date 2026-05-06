@@ -1,0 +1,10 @@
+[project]
+name = "oclite"
+version = "0.1.0"
+description = "Lightweight OpenClaw-compatible gateway/runtime with Telegram routing and a minimal control UI."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+oclite = "oclite.cli:main"
+

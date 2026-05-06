@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OCLite Control</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>OCLite</h1>
+        <p>OpenClaw-compatible gateway for Telegram-routed agents</p>
+      </div>
+      <button id="refresh">Refresh</button>
+    </header>
+
+    <main>
+      <section class="band dashboard">
+        <div>
+          <span class="label">Runtime Home</span>
+          <strong id="home">-</strong>
+        </div>
+        <div>
+          <span class="label">Agents</span>
+          <strong id="agent-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Sessions</span>
+          <strong id="session-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Allowed Senders</span>
+          <strong id="sender-count">0</strong>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article>
+          <h2>Agents</h2>
+          <form id="agent-form" class="stack">
+            <input name="id" placeholder="agent id, e.g. planner" />
+            <input name="name" placeholder="display name" />
+            <input name="role" placeholder="role / identity" />
+            <input name="workspace" placeholder="existing OpenClaw workspace path, optional" />
+            <select name="model" id="agent-model"></select>
+            <button>Create Agent</button>
+          </form>
+          <form id="workspace-form" class="inline-form">
+            <select name="agentId" id="workspace-agent"></select>
+            <input name="workspace" placeholder="point agent at existing OpenClaw workspace" />
+            <button>Attach</button>
+          </form>
+          <div id="agents" class="list"></div>
+        </article>
+
+        <article>
+          <h2>Telegram</h2>
+          <form id="bot-form" class="inline-form">
+            <input name="accountId" placeholder="bot id, e.g. main-bot" />
+            <input name="tokenEnv" placeholder="token env var" />
+            <button>Add Bot</button>
+          </form>
+          <form id="allow-form" class="inline-form">
+            <input name="senderId" placeholder="sender id" />
+            <button>Allow Sender</button>
+          </form>
+          <form id="bind-form" class="inline-form">
+            <select name="agentId" id="bind-agent"></select>
+            <select name="accountId" id="bind-bot"></select>
+            <button>Bind</button>
+          </form>
+          <div id="telegram" class="list"></div>
+        </article>
+
+        <article>
+          <h2>Models</h2>
+          <form id="model-form" class="inline-form">
+            <input name="model" placeholder="provider:model" />
+            <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
+            <button>Allow Model</button>
+          </form>
+          <div id="models" class="list"></div>
+        </article>
+
+        <article>
+          <h2>Sessions</h2>
+          <button id="prune">Mark Stale</button>
+          <div id="sessions" class="list"></div>
+        </article>
+
+        <article class="wide">
+          <h2>Task Test</h2>
+          <form id="task-form" class="task-form">
+            <select name="agentId" id="task-agent"></select>
+            <textarea name="message" placeholder="Send a local test task to an agent"></textarea>
+            <button>Run Task</button>
+          </form>
+          <pre id="task-output"></pre>
+        </article>
+
+        <article class="wide">
+          <h2>OpenClaw Workspace Contract</h2>
+          <div id="workspace-files" class="chips"></div>
+        </article>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
