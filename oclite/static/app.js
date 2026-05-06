@@ -37,6 +37,7 @@ function renderModels() {
     .join("");
   fillSelect("#agent-model", allowed, defaultModel);
   fillSelect("#set-agent-model", allowed, defaultModel);
+  fillSelect("#model-provider", Object.keys(state.config.providers || {}), "openai-codex");
 }
 
 function renderProviders() {
@@ -50,6 +51,7 @@ function renderProviders() {
         `)
       )
       .join("") || item("<small>No providers yet</small>");
+  fillSelect("#auth-provider", Object.keys(providers), "openai-codex");
 }
 
 function renderAgents() {
@@ -163,9 +165,27 @@ wireForm("#bind-form", "/api/agents/bind");
 wireForm("#model-form", "/api/models/allow", (form) => {
   const data = formJson(form);
   data.makeDefault = form.elements.makeDefault.checked;
+  if (data.providerId && data.model && !data.model.includes("/") && !data.model.includes(":")) {
+    data.model = `${data.providerId}/${data.model}`;
+  }
+  delete data.providerId;
   return data;
 });
 wireForm("#provider-form", "/api/providers");
+
+document.querySelector("#provider-auth-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await api("/api/providers/auth", {
+      method: "POST",
+      body: JSON.stringify(formJson(event.currentTarget)),
+    });
+    document.querySelector("#provider-auth-output").textContent =
+      `Auth OK. ${result.modelCount} models available.\n` + result.models.join("\n");
+  } catch (error) {
+    document.querySelector("#provider-auth-output").textContent = error.message;
+  }
+});
 
 document.querySelector("#task-form").addEventListener("submit", async (event) => {
   event.preventDefault();

@@ -171,6 +171,10 @@ class Store:
             "maxOutputTokens": int(data.get("maxOutputTokens", existing.get("maxOutputTokens", 1200))),
             "timeoutSeconds": int(data.get("timeoutSeconds", existing.get("timeoutSeconds", 60))),
         }
+        if data.get("organization"):
+            updated["organization"] = data["organization"]
+        if data.get("project"):
+            updated["project"] = data["project"]
         if data.get("apiKey"):
             updated["apiKey"] = data["apiKey"]
         providers[provider_id] = updated

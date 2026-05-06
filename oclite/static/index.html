@@ -81,7 +81,8 @@
         <article>
           <h2>Models</h2>
           <form id="model-form" class="inline-form">
-            <input name="model" placeholder="provider:model" />
+            <select name="providerId" id="model-provider"></select>
+            <input name="model" placeholder="model, e.g. gpt-5.5" />
             <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
             <button>Allow Model</button>
           </form>
@@ -95,8 +96,16 @@
             <input name="apiKey" placeholder="API key, optional" />
             <input name="apiKeyEnv" placeholder="API key env var, e.g. OPENAI_API_KEY" />
             <input name="baseUrl" placeholder="base URL, default https://api.openai.com/v1" />
+            <input name="organization" placeholder="OpenAI organization id, optional" />
+            <input name="project" placeholder="OpenAI project id, optional" />
             <button>Save Provider</button>
           </form>
+          <form id="provider-auth-form" class="inline-form">
+            <select name="providerId" id="auth-provider"></select>
+            <span></span>
+            <button>Test Auth</button>
+          </form>
+          <pre id="provider-auth-output"></pre>
           <div id="providers" class="list"></div>
         </article>
 

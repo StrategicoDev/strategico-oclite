@@ -132,12 +132,15 @@ export OPENAI_API_KEY="sk-..."
 oclite run --host 127.0.0.1 --port 8787
 ```
 
+The OpenAI API uses API keys for API authentication. OCLite does not implement OpenAI OAuth because OpenAI's API authentication is Bearer API-key based; OAuth in OpenAI docs applies to GPT Actions signing users into external services, not linking a ChatGPT subscription to local API calls.
+
 The control UI can:
 
 - allow models
 - set the default model
 - assign a model to an existing agent
 - configure provider API key/env/base URL
+- test provider auth by listing available models
 
 ## CLI
 

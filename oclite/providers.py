@@ -40,6 +40,31 @@ class ProviderRunner:
             return message
         raise ProviderError(f"Unsupported provider '{ref.provider}' for model '{model}'")
 
+    def test_auth(self, provider_id: str) -> dict[str, Any]:
+        provider_config = self._provider_config(provider_id)
+        api_key = provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY"))
+        if not api_key:
+            raise ProviderError(
+                f"Missing API key for '{provider_id}'. Set {provider_config.get('apiKeyEnv', 'OPENAI_API_KEY')} "
+                "or save an API key for this provider."
+            )
+        base_url = provider_config.get("baseUrl", "https://api.openai.com/v1").rstrip("/")
+        request = urllib.request.Request(
+            f"{base_url}/models",
+            headers=self._headers(api_key, provider_config),
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=int(provider_config.get("timeoutSeconds", 60))) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise ProviderError(f"Provider auth failed with HTTP {exc.code}: {details}") from exc
+        except urllib.error.URLError as exc:
+            raise ProviderError(f"Provider auth network error: {exc.reason}") from exc
+        models = [item.get("id") for item in data.get("data", []) if item.get("id")]
+        return {"ok": True, "providerId": provider_id, "modelCount": len(models), "models": models[:25]}
+
     def _openai_response(self, ref: ModelRef, instructions: str, message: str) -> str:
         provider_config = self._provider_config(ref.provider)
         api_key = provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY"))
@@ -58,10 +83,7 @@ class ProviderRunner:
         request = urllib.request.Request(
             f"{base_url}/responses",
             data=json.dumps(body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=self._headers(api_key, provider_config),
             method="POST",
         )
         try:
@@ -78,6 +100,17 @@ class ProviderRunner:
         providers = self.config.get("providers", {})
         return providers.get(provider) or providers.get("openai") or {}
 
+    def _headers(self, api_key: str, provider_config: dict[str, Any]) -> dict[str, str]:
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        }
+        if provider_config.get("organization"):
+            headers["OpenAI-Organization"] = provider_config["organization"]
+        if provider_config.get("project"):
+            headers["OpenAI-Project"] = provider_config["project"]
+        return headers
+
     def _extract_text(self, data: dict[str, Any]) -> str:
         if isinstance(data.get("output_text"), str) and data["output_text"].strip():
             return data["output_text"].strip()
@@ -93,4 +126,3 @@ class ProviderRunner:
         if texts:
             return "\n".join(texts).strip()
         raise ProviderError("Provider returned no text output")
-

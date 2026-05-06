@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .models import Agent
+from .providers import ProviderError, ProviderRunner
 from .runtime import AgentRuntime, TelegramPoller
 from .store import Store
 
@@ -57,12 +58,16 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 return self.allow_model()
             if parsed.path == "/api/providers":
                 return self.save_provider()
+            if parsed.path == "/api/providers/auth":
+                return self.auth_provider()
             if parsed.path == "/api/sessions/prune":
                 count = self.store.prune_stale()
                 return self.json_response({"pruned": count})
             if parsed.path == "/api/tasks":
                 return self.run_task()
         except ValueError as exc:
+            return self.json_response({"error": str(exc)}, 400)
+        except ProviderError as exc:
             return self.json_response({"error": str(exc)}, 400)
         self.send_error(404)
 
@@ -155,6 +160,11 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         data = self.read_json()
         provider = self.store.save_provider(data["providerId"], data)
         self.json_response(provider)
+
+    def auth_provider(self) -> None:
+        data = self.read_json()
+        result = ProviderRunner(self.store.config()).test_auth(data["providerId"])
+        self.json_response(result)
 
     def run_task(self) -> None:
         data = self.read_json()
