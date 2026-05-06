@@ -16,7 +16,7 @@ from typing import Any
 OPENAI_CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
 OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
-OPENAI_CODEX_REDIRECT_URI = "http://127.0.0.1:1455/auth/callback"
+OPENAI_CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback"
 OPENAI_CODEX_SCOPE = "openid profile email offline_access"
 
 
@@ -109,6 +109,9 @@ def start_openai_codex_oauth(home: Path, profile_id: str = "default") -> dict[st
         "state": state,
         "code_challenge": challenge,
         "code_challenge_method": "S256",
+        "id_token_add_organizations": "true",
+        "codex_cli_simplified_flow": "true",
+        "originator": "pi",
     }
     ensure_callback_server(home)
     return {

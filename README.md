@@ -137,8 +137,9 @@ The standard OpenAI API uses API keys for API authentication, and OCLite keeps t
 For `openai-codex/*`, OCLite also supports the OpenAI Codex/ChatGPT subscription OAuth flow used by OpenClaw:
 
 - PKCE browser login through `https://auth.openai.com/oauth/authorize`
-- local callback on `http://127.0.0.1:1455/auth/callback`
+- local callback on `http://localhost:1455/auth/callback`
 - scope: `openid profile email offline_access`
+- Codex/OpenClaw authorize params: `id_token_add_organizations=true`, `codex_cli_simplified_flow=true`, `originator=pi`
 - token exchange through `https://auth.openai.com/oauth/token`
 - profile storage in `~/.oclite/auth-profiles.json`
 - automatic refresh when an OAuth profile expires
