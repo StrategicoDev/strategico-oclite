@@ -22,12 +22,37 @@ need_cmd() {
   command -v "$1" >/dev/null 2>&1 || fail "Missing required command: $1"
 }
 
+ensure_path() {
+  case ":$PATH:" in
+    *":$OCLITE_BIN_DIR:"*) ;;
+    *)
+      export PATH="$OCLITE_BIN_DIR:$PATH"
+      local profile=""
+      if [ -n "${ZSH_VERSION:-}" ]; then
+        profile="$HOME/.zshrc"
+      elif [ -n "${BASH_VERSION:-}" ]; then
+        profile="$HOME/.bashrc"
+      elif [ -f "$HOME/.zshrc" ]; then
+        profile="$HOME/.zshrc"
+      elif [ -f "$HOME/.bashrc" ]; then
+        profile="$HOME/.bashrc"
+      fi
+
+      if [ -n "$profile" ] && ! grep -qs "$OCLITE_BIN_DIR" "$profile"; then
+        printf '\n# OCLite\nexport PATH="%s:$PATH"\n' "$OCLITE_BIN_DIR" >> "$profile"
+        info "Added $OCLITE_BIN_DIR to $profile"
+      fi
+      ;;
+  esac
+}
+
 need_cmd git
 need_cmd python3
 
 info "Installing OCLite from $OCLITE_REPO"
 
 mkdir -p "$OCLITE_BIN_DIR"
+ensure_path
 
 if [ -d "$OCLITE_SRC/.git" ]; then
   info "Updating existing source at $OCLITE_SRC"
@@ -59,6 +84,8 @@ info "Initializing isolated runtime at $OCLITE_HOME"
 
 info "Install complete"
 printf '\nRun the control UI:\n'
-printf '  OCLITE_HOME="%s" oclite run --host %s --port %s\n' "$OCLITE_HOME" "$OCLITE_HOST" "$OCLITE_PORT"
+printf '  oclite run --host %s --port %s\n' "$OCLITE_HOST" "$OCLITE_PORT"
+printf '\nWorks immediately in this terminal too:\n'
+printf '  "%s/oclite" run --host %s --port %s\n' "$OCLITE_BIN_DIR" "$OCLITE_HOST" "$OCLITE_PORT"
 printf '\nThen open:\n'
 printf '  http://%s:%s\n' "$OCLITE_HOST" "$OCLITE_PORT"

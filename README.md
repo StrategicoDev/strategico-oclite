@@ -40,6 +40,7 @@ The installer:
 - clones or updates the code in `~/.oclite-src`
 - keeps runtime state in `~/.oclite`
 - creates `~/.local/bin/oclite`
+- adds `~/.local/bin` to your shell profile when needed
 - runs `oclite setup`
 - leaves existing OpenClaw installs untouched
 
@@ -47,6 +48,12 @@ Start the UI:
 
 ```bash
 oclite run --host 127.0.0.1 --port 8787
+```
+
+If your current shell has not reloaded its profile yet:
+
+```bash
+~/.local/bin/oclite run --host 127.0.0.1 --port 8787
 ```
 
 To attach a copied OpenClaw workspace:
