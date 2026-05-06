@@ -35,7 +35,7 @@ class AgentRuntime:
             response = self._mock_response(agent, message)
         else:
             try:
-                response = ProviderRunner(self.store.config()).run(
+                response = ProviderRunner(self.store.config(), self.store.home).run(
                     agent.model,
                     self.workspace_context(agent),
                     message,

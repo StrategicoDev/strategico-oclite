@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .models import Agent
+from .oauth import AuthStore, OAuthError, complete_openai_codex_oauth, start_openai_codex_oauth
 from .providers import ProviderError, ProviderRunner
 from .runtime import AgentRuntime, TelegramPoller
 from .store import Store
@@ -27,6 +28,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             return self.json_response([agent.to_dict() for agent in self.store.list_agents()])
         if parsed.path == "/api/sessions":
             return self.json_response(self.store.list_sessions())
+        if parsed.path == "/api/auth/profiles":
+            return self.json_response(AuthStore(self.store.home).list_profiles())
         if parsed.path == "/" or not parsed.path.startswith("/api/"):
             return self.serve_static(parsed.path)
         self.send_error(404)
@@ -60,6 +63,10 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 return self.save_provider()
             if parsed.path == "/api/providers/auth":
                 return self.auth_provider()
+            if parsed.path == "/api/oauth/start":
+                return self.start_oauth()
+            if parsed.path == "/api/oauth/complete":
+                return self.complete_oauth()
             if parsed.path == "/api/sessions/prune":
                 count = self.store.prune_stale()
                 return self.json_response({"pruned": count})
@@ -68,6 +75,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         except ValueError as exc:
             return self.json_response({"error": str(exc)}, 400)
         except ProviderError as exc:
+            return self.json_response({"error": str(exc)}, 400)
+        except OAuthError as exc:
             return self.json_response({"error": str(exc)}, 400)
         self.send_error(404)
 
@@ -163,7 +172,20 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
 
     def auth_provider(self) -> None:
         data = self.read_json()
-        result = ProviderRunner(self.store.config()).test_auth(data["providerId"])
+        result = ProviderRunner(self.store.config(), self.store.home).test_auth(data["providerId"])
+        self.json_response(result)
+
+    def start_oauth(self) -> None:
+        data = self.read_json()
+        provider_id = data.get("providerId", "openai-codex")
+        if provider_id != "openai-codex":
+            raise OAuthError("Only openai-codex OAuth is supported right now")
+        result = start_openai_codex_oauth(self.store.home, data.get("profileId", "default"))
+        self.json_response(result)
+
+    def complete_oauth(self) -> None:
+        data = self.read_json()
+        result = complete_openai_codex_oauth(self.store.home, data["code"], data["state"])
         self.json_response(result)
 
     def run_task(self) -> None:

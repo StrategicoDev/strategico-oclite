@@ -98,6 +98,7 @@
             <input name="baseUrl" placeholder="base URL, default https://api.openai.com/v1" />
             <input name="organization" placeholder="OpenAI organization id, optional" />
             <input name="project" placeholder="OpenAI project id, optional" />
+            <input name="profileId" placeholder="OAuth profile id, e.g. default" />
             <button>Save Provider</button>
           </form>
           <form id="provider-auth-form" class="inline-form">
@@ -106,6 +107,18 @@
             <button>Test Auth</button>
           </form>
           <pre id="provider-auth-output"></pre>
+          <form id="oauth-start-form" class="inline-form">
+            <select name="providerId" id="oauth-provider"></select>
+            <input name="profileId" placeholder="profile id, e.g. default" value="default" />
+            <button>Start OAuth</button>
+          </form>
+          <form id="oauth-complete-form" class="stack">
+            <input name="code" placeholder="manual callback code, optional" />
+            <input name="state" placeholder="manual callback state, optional" />
+            <button>Complete OAuth Manually</button>
+          </form>
+          <pre id="oauth-output"></pre>
+          <div id="auth-profiles" class="list"></div>
           <div id="providers" class="list"></div>
         </article>
 

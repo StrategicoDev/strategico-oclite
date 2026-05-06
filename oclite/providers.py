@@ -5,7 +5,10 @@ import os
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from .oauth import AuthStore, OAuthError, refresh_openai_codex_oauth
 
 
 class ProviderError(RuntimeError):
@@ -29,8 +32,9 @@ def parse_model_ref(model: str) -> ModelRef:
 
 
 class ProviderRunner:
-    def __init__(self, config: dict[str, Any]):
+    def __init__(self, config: dict[str, Any], home: Path | None = None):
         self.config = config
+        self.home = home
 
     def run(self, model: str, instructions: str, message: str) -> str:
         ref = parse_model_ref(model)
@@ -42,16 +46,16 @@ class ProviderRunner:
 
     def test_auth(self, provider_id: str) -> dict[str, Any]:
         provider_config = self._provider_config(provider_id)
-        api_key = provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY"))
-        if not api_key:
+        credential = self._credential(provider_id, provider_config)
+        if not credential:
             raise ProviderError(
                 f"Missing API key for '{provider_id}'. Set {provider_config.get('apiKeyEnv', 'OPENAI_API_KEY')} "
-                "or save an API key for this provider."
+                "or save an API key/OAuth profile for this provider."
             )
         base_url = provider_config.get("baseUrl", "https://api.openai.com/v1").rstrip("/")
         request = urllib.request.Request(
             f"{base_url}/models",
-            headers=self._headers(api_key, provider_config),
+            headers=self._headers(credential, provider_config),
             method="GET",
         )
         try:
@@ -67,11 +71,11 @@ class ProviderRunner:
 
     def _openai_response(self, ref: ModelRef, instructions: str, message: str) -> str:
         provider_config = self._provider_config(ref.provider)
-        api_key = provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY"))
-        if not api_key:
+        credential = self._credential(ref.provider, provider_config)
+        if not credential:
             raise ProviderError(
                 f"Missing API key for '{ref.provider}'. Set {provider_config.get('apiKeyEnv', 'OPENAI_API_KEY')} "
-                "or configure a provider API key in OCLite."
+                "or configure a provider API key/OAuth profile in OCLite."
             )
         base_url = provider_config.get("baseUrl", "https://api.openai.com/v1").rstrip("/")
         body = {
@@ -83,7 +87,7 @@ class ProviderRunner:
         request = urllib.request.Request(
             f"{base_url}/responses",
             data=json.dumps(body).encode("utf-8"),
-            headers=self._headers(api_key, provider_config),
+            headers=self._headers(credential, provider_config),
             method="POST",
         )
         try:
@@ -99,6 +103,19 @@ class ProviderRunner:
     def _provider_config(self, provider: str) -> dict[str, Any]:
         providers = self.config.get("providers", {})
         return providers.get(provider) or providers.get("openai") or {}
+
+    def _credential(self, provider: str, provider_config: dict[str, Any]) -> str | None:
+        if provider == "openai-codex" and self.home:
+            profile_id = provider_config.get("profileId", "default")
+            profile = AuthStore(self.home).get_profile(provider, profile_id)
+            if profile:
+                if int(profile.get("expires", 0)) <= int(__import__("time").time()):
+                    try:
+                        profile = refresh_openai_codex_oauth(self.home, profile)
+                    except OAuthError as exc:
+                        raise ProviderError(str(exc)) from exc
+                return profile.get("access")
+        return provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY"))
 
     def _headers(self, api_key: str, provider_config: dict[str, Any]) -> dict[str, str]:
         headers = {

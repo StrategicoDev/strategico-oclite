@@ -132,7 +132,17 @@ export OPENAI_API_KEY="sk-..."
 oclite run --host 127.0.0.1 --port 8787
 ```
 
-The OpenAI API uses API keys for API authentication. OCLite does not implement OpenAI OAuth because OpenAI's API authentication is Bearer API-key based; OAuth in OpenAI docs applies to GPT Actions signing users into external services, not linking a ChatGPT subscription to local API calls.
+The standard OpenAI API uses API keys for API authentication, and OCLite keeps that path available.
+
+For `openai-codex/*`, OCLite also supports the OpenAI Codex/ChatGPT subscription OAuth flow used by OpenClaw:
+
+- PKCE browser login through `https://auth.openai.com/oauth/authorize`
+- local callback on `http://127.0.0.1:1455/auth/callback`
+- token exchange through `https://auth.openai.com/oauth/token`
+- profile storage in `~/.oclite/auth-profiles.json`
+- automatic refresh when an OAuth profile expires
+
+In the UI, use Providers -> Start OAuth with provider `openai-codex` and profile `default`. After the browser callback completes, set provider `openai-codex` to profile `default`, then assign an `openai-codex/...` model to the agent.
 
 The control UI can:
 

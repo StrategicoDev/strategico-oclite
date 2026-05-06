@@ -52,6 +52,25 @@ function renderProviders() {
       )
       .join("") || item("<small>No providers yet</small>");
   fillSelect("#auth-provider", Object.keys(providers), "openai-codex");
+  fillSelect("#oauth-provider", Object.keys(providers), "openai-codex");
+  renderAuthProfiles();
+}
+
+async function renderAuthProfiles() {
+  try {
+    const profiles = await api("/api/auth/profiles");
+    document.querySelector("#auth-profiles").innerHTML =
+      profiles
+        .map((profile) =>
+          item(`
+            <header><strong>${profile.providerId}:${profile.profileId}</strong><span class="pill">OAuth</span></header>
+            <small>${profile.accountId || "account linked"} · expires ${new Date(profile.expires * 1000).toLocaleString()}</small>
+          `)
+        )
+        .join("") || item("<small>No OAuth profiles yet</small>");
+  } catch (error) {
+    document.querySelector("#auth-profiles").innerHTML = item(`<small>${error.message}</small>`);
+  }
 }
 
 function renderAgents() {
@@ -184,6 +203,35 @@ document.querySelector("#provider-auth-form").addEventListener("submit", async (
       `Auth OK. ${result.modelCount} models available.\n` + result.models.join("\n");
   } catch (error) {
     document.querySelector("#provider-auth-output").textContent = error.message;
+  }
+});
+
+document.querySelector("#oauth-start-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await api("/api/oauth/start", {
+      method: "POST",
+      body: JSON.stringify(formJson(event.currentTarget)),
+    });
+    document.querySelector("#oauth-output").textContent =
+      `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`;
+    window.open(result.authUrl, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    document.querySelector("#oauth-output").textContent = error.message;
+  }
+});
+
+document.querySelector("#oauth-complete-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    const result = await api("/api/oauth/complete", {
+      method: "POST",
+      body: JSON.stringify(formJson(event.currentTarget)),
+    });
+    document.querySelector("#oauth-output").textContent = `OAuth linked: ${result.providerId}:${result.profileId}`;
+    await refresh();
+  } catch (error) {
+    document.querySelector("#oauth-output").textContent = error.message;
   }
 });
 

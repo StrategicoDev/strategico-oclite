@@ -175,6 +175,8 @@ class Store:
             updated["organization"] = data["organization"]
         if data.get("project"):
             updated["project"] = data["project"]
+        if data.get("profileId"):
+            updated["profileId"] = data["profileId"]
         if data.get("apiKey"):
             updated["apiKey"] = data["apiKey"]
         providers[provider_id] = updated
