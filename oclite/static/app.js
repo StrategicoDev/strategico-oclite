@@ -134,6 +134,8 @@ wireForm("#bot-form", "/api/telegram/bots", (form) => {
   delete data.token;
   if (/^\d+:[A-Za-z0-9_-]+$/.test(tokenValue)) {
     data.token = tokenValue;
+  } else if (/^\d+$/.test(data.accountId || "") && /^[A-Za-z0-9_-]{20,}$/.test(tokenValue)) {
+    data.token = `${data.accountId}:${tokenValue}`;
   } else {
     data.tokenEnv = tokenValue;
   }

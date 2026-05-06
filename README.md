@@ -95,6 +95,16 @@ Linking is intentionally simple:
 
 Only allowed sender ids can talk to bound agents.
 
+The bot token field accepts any of these:
+
+```text
+TELEGRAM_BOT_TOKEN_MAIN
+8697975956:AAF...
+AAF...
+```
+
+When you enter only the token secret, OCLite combines it with the bot id.
+
 ## CLI
 
 ```bash

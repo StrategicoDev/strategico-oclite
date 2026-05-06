@@ -103,6 +103,11 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         account_id = data["accountId"].strip()
         token_env = data.get("tokenEnv", "").strip()
         token = data.get("token", "").strip()
+        token_secret = data.get("tokenSecret", "").strip()
+        if not token and token_secret and account_id.isdigit():
+            token = f"{account_id}:{token_secret}"
+        if token and ":" not in token and account_id.isdigit():
+            token = f"{account_id}:{token}"
         if not account_id or not (token_env or token):
             raise ValueError("Bot id and token env or token are required")
         config = self.store.config()
