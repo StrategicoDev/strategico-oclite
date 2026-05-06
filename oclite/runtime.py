@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import Agent, OPENCLAW_WORKSPACE_FILES
+from .providers import ProviderError, ProviderRunner
 from .store import Store
 
 
@@ -33,7 +34,14 @@ class AgentRuntime:
         if agent.model == "mock:echo":
             response = self._mock_response(agent, message)
         else:
-            response = self._provider_placeholder(agent, message)
+            try:
+                response = ProviderRunner(self.store.config()).run(
+                    agent.model,
+                    self.workspace_context(agent),
+                    message,
+                )
+            except ProviderError as exc:
+                response = f"Provider error: {exc}"
         self.store.append_session_event(session_id, {"role": "assistant", "content": response})
         return response
 
@@ -44,13 +52,6 @@ class AgentRuntime:
                 "Use Agents -> Create, assign an authorized model, then bind a Telegram bot."
             )
         return f"{agent.name} received: {message}"
-
-    def _provider_placeholder(self, agent: Agent, message: str) -> str:
-        return (
-            f"{agent.name} is assigned to {agent.model}, but provider execution is not wired in this MVP slice yet. "
-            f"Task received: {message}"
-        )
-
 
 class TelegramPoller:
     def __init__(self, store: Store):

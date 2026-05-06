@@ -11,6 +11,7 @@ The MVP keeps a deliberately small surface:
 - Sender allowlist plus bot-to-agent bindings.
 - Lightweight filesystem sessions.
 - Minimal local control UI.
+- OpenAI-compatible provider execution through the Responses API.
 
 ## Quick Start
 
@@ -104,6 +105,39 @@ AAF...
 ```
 
 When you enter only the token secret, OCLite combines it with the bot id.
+
+## Provider Execution
+
+`mock:echo` is built in for smoke testing.
+
+OpenAI-compatible models use either `provider/model` or `provider:model`:
+
+```text
+openai/gpt-5.5
+openai:gpt-5.5
+openai-codex/gpt-5.5
+```
+
+The default providers are `openai` and `openai-codex`, both using:
+
+```text
+https://api.openai.com/v1
+OPENAI_API_KEY
+```
+
+You can also save a provider API key in the control UI. Env vars are cleaner for a longer-running Mac install:
+
+```bash
+export OPENAI_API_KEY="sk-..."
+oclite run --host 127.0.0.1 --port 8787
+```
+
+The control UI can:
+
+- allow models
+- set the default model
+- assign a model to an existing agent
+- configure provider API key/env/base URL
 
 ## CLI
 

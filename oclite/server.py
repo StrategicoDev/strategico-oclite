@@ -43,6 +43,10 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 data = self.read_json()
                 agent = self.store.set_agent_workspace(data["agentId"], data["workspace"])
                 return self.json_response(agent.to_dict())
+            if parsed.path == "/api/agents/model":
+                data = self.read_json()
+                agent = self.store.set_agent_model(data["agentId"], data["model"])
+                return self.json_response(agent.to_dict())
             if parsed.path == "/api/agents/bind":
                 return self.bind_agent()
             if parsed.path == "/api/telegram/bots":
@@ -51,6 +55,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 return self.allow_sender()
             if parsed.path == "/api/models/allow":
                 return self.allow_model()
+            if parsed.path == "/api/providers":
+                return self.save_provider()
             if parsed.path == "/api/sessions/prune":
                 count = self.store.prune_stale()
                 return self.json_response({"pruned": count})
@@ -144,6 +150,11 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             config["models"]["default"] = model
         self.store.save_config(config)
         self.json_response(config["models"])
+
+    def save_provider(self) -> None:
+        data = self.read_json()
+        provider = self.store.save_provider(data["providerId"], data)
+        self.json_response(provider)
 
     def run_task(self) -> None:
         data = self.read_json()

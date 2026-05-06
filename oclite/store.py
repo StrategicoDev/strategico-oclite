@@ -10,6 +10,20 @@ from .models import Agent, SessionMeta, ensure_openclaw_workspace, new_id, utc_n
 
 DEFAULT_ALLOWED_MODELS = ["mock:echo"]
 DEFAULT_TOOLS = ["read_file", "write_file", "list_files", "create_agent", "delegate_task"]
+DEFAULT_PROVIDERS = {
+    "openai": {
+        "apiKeyEnv": "OPENAI_API_KEY",
+        "baseUrl": "https://api.openai.com/v1",
+        "maxOutputTokens": 1200,
+        "timeoutSeconds": 60,
+    },
+    "openai-codex": {
+        "apiKeyEnv": "OPENAI_API_KEY",
+        "baseUrl": "https://api.openai.com/v1",
+        "maxOutputTokens": 1200,
+        "timeoutSeconds": 60,
+    },
+}
 
 
 class Store:
@@ -38,6 +52,7 @@ class Store:
                         "maxActivePerAgent": 5,
                     },
                     "models": {"allowed": DEFAULT_ALLOWED_MODELS, "default": "mock:echo"},
+                    "providers": DEFAULT_PROVIDERS,
                     "telegram": {"bots": {}, "allowlist": [], "detectedSenders": []},
                 }
             )
@@ -63,7 +78,11 @@ class Store:
         self.setup_dirs_only()
         if not self.config_path.exists():
             self.setup()
-        return json.loads(self.config_path.read_text(encoding="utf-8"))
+        config = json.loads(self.config_path.read_text(encoding="utf-8"))
+        changed = self._ensure_config_defaults(config)
+        if changed:
+            self.save_config(config)
+        return config
 
     def save_config(self, config: dict[str, Any]) -> None:
         self._write_config(config)
@@ -77,6 +96,23 @@ class Store:
 
     def _write_config(self, config: dict[str, Any]) -> None:
         self.config_path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    def _ensure_config_defaults(self, config: dict[str, Any]) -> bool:
+        changed = False
+        if "providers" not in config:
+            config["providers"] = DEFAULT_PROVIDERS
+            changed = True
+        else:
+            for provider, defaults in DEFAULT_PROVIDERS.items():
+                if provider not in config["providers"]:
+                    config["providers"][provider] = defaults
+                    changed = True
+                else:
+                    for key, value in defaults.items():
+                        if key not in config["providers"][provider]:
+                            config["providers"][provider][key] = value
+                            changed = True
+        return changed
 
     def list_agents(self) -> list[Agent]:
         self.setup()
@@ -107,6 +143,39 @@ class Store:
         agent.workspace = str(path)
         self.save_agent(agent)
         return agent
+
+    def set_agent_model(self, agent_id: str, model: str) -> Agent:
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Unknown agent '{agent_id}'")
+        config = self.config()
+        if model not in config["models"]["allowed"]:
+            raise ValueError(f"Model '{model}' is not authorized")
+        agent.model = model
+        self.save_agent(agent)
+        return agent
+
+    def save_provider(self, provider_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        provider_id = provider_id.strip()
+        if not provider_id:
+            raise ValueError("Provider id is required")
+        config = self.config()
+        providers = config.setdefault("providers", {})
+        existing = providers.get(provider_id, {})
+        api_key_env = data.get("apiKeyEnv") or existing.get("apiKeyEnv") or f"{provider_id.upper()}_API_KEY"
+        base_url = data.get("baseUrl") or existing.get("baseUrl") or "https://api.openai.com/v1"
+        updated = {
+            **existing,
+            "apiKeyEnv": api_key_env,
+            "baseUrl": base_url,
+            "maxOutputTokens": int(data.get("maxOutputTokens", existing.get("maxOutputTokens", 1200))),
+            "timeoutSeconds": int(data.get("timeoutSeconds", existing.get("timeoutSeconds", 60))),
+        }
+        if data.get("apiKey"):
+            updated["apiKey"] = data["apiKey"]
+        providers[provider_id] = updated
+        self.save_config(config)
+        return updated
 
     def create_agent(self, data: dict[str, Any]) -> Agent:
         config = self.config()

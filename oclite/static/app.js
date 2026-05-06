@@ -22,6 +22,7 @@ function render() {
   document.querySelector("#sender-count").textContent = state.config.telegram.allowlist.length;
 
   renderModels();
+  renderProviders();
   renderAgents();
   renderTelegram();
   renderSessions();
@@ -35,6 +36,20 @@ function renderModels() {
     .map((model) => item(`<header><strong>${model}</strong>${model === defaultModel ? '<span class="pill">default</span>' : ""}</header>`))
     .join("");
   fillSelect("#agent-model", allowed, defaultModel);
+  fillSelect("#set-agent-model", allowed, defaultModel);
+}
+
+function renderProviders() {
+  const providers = state.config.providers || {};
+  document.querySelector("#providers").innerHTML =
+    Object.entries(providers)
+      .map(([id, provider]) =>
+        item(`
+          <header><strong>${id}</strong><span class="pill">${provider.apiKey ? "key saved" : provider.apiKeyEnv || "no key"}</span></header>
+          <small>${provider.baseUrl || "https://api.openai.com/v1"}</small>
+        `)
+      )
+      .join("") || item("<small>No providers yet</small>");
 }
 
 function renderAgents() {
@@ -51,6 +66,7 @@ function renderAgents() {
   fillSelect("#bind-agent", state.agents.map((agent) => agent.id));
   fillSelect("#task-agent", state.agents.map((agent) => agent.id));
   fillSelect("#workspace-agent", state.agents.map((agent) => agent.id));
+  fillSelect("#model-agent", state.agents.map((agent) => agent.id));
 }
 
 function renderTelegram() {
@@ -128,6 +144,7 @@ document.querySelector("#prune").addEventListener("click", async () => {
 
 wireForm("#agent-form", "/api/agents");
 wireForm("#workspace-form", "/api/agents/workspace");
+wireForm("#agent-model-form", "/api/agents/model");
 wireForm("#bot-form", "/api/telegram/bots", (form) => {
   const data = formJson(form);
   const tokenValue = data.token || "";
@@ -148,6 +165,7 @@ wireForm("#model-form", "/api/models/allow", (form) => {
   data.makeDefault = form.elements.makeDefault.checked;
   return data;
 });
+wireForm("#provider-form", "/api/providers");
 
 document.querySelector("#task-form").addEventListener("submit", async (event) => {
   event.preventDefault();
