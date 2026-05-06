@@ -101,15 +101,20 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
     def add_bot(self) -> None:
         data = self.read_json()
         account_id = data["accountId"].strip()
-        token_env = data["tokenEnv"].strip()
-        if not account_id or not token_env:
-            raise ValueError("Bot id and token env are required")
+        token_env = data.get("tokenEnv", "").strip()
+        token = data.get("token", "").strip()
+        if not account_id or not (token_env or token):
+            raise ValueError("Bot id and token env or token are required")
         config = self.store.config()
-        config["telegram"]["bots"][account_id] = {
+        bot = {
             "accountId": account_id,
-            "tokenEnv": token_env,
             "enabled": True,
         }
+        if token_env:
+            bot["tokenEnv"] = token_env
+        if token:
+            bot["token"] = token
+        config["telegram"]["bots"][account_id] = bot
         self.store.save_config(config)
         self.json_response(config["telegram"]["bots"][account_id], 201)
 

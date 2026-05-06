@@ -62,7 +62,7 @@ function renderTelegram() {
     agent.bindings.map((binding) => `${binding.channel}:${binding.accountId} -> ${agent.id}`)
   );
   document.querySelector("#telegram").innerHTML = [
-    item(`<header><strong>Bots</strong><span class="pill">${bots.length}</span></header>${bots.map((bot) => `<small>${bot.accountId} · ${bot.tokenEnv}</small><br />`).join("") || "<small>No bots yet</small>"}`),
+    item(`<header><strong>Bots</strong><span class="pill">${bots.length}</span></header>${bots.map((bot) => `<small>${bot.accountId} · ${bot.tokenEnv || "stored token"}</small><br />`).join("") || "<small>No bots yet</small>"}`),
     item(`<header><strong>Allowed Senders</strong><span class="pill">${allowlist.length}</span></header>${allowlist.map((id) => `<small>${id}</small><br />`).join("") || "<small>No allowed senders yet</small>"}`),
     item(`<header><strong>Detected Senders</strong><span class="pill">${detected.length}</span></header>${detected.map((id) => `<small>${id}</small><br />`).join("") || "<small>No detected senders yet</small>"}`),
     item(`<header><strong>Bindings</strong><span class="pill">${bindings.length}</span></header>${bindings.map((line) => `<small>${line}</small><br />`).join("") || "<small>No bindings yet</small>"}`),
@@ -108,10 +108,11 @@ function formJson(form) {
 function wireForm(selector, path, transform) {
   document.querySelector(selector).addEventListener("submit", async (event) => {
     event.preventDefault();
+    const form = event.currentTarget;
     try {
-      const payload = transform ? transform(event.currentTarget) : formJson(event.currentTarget);
+      const payload = transform ? transform(form) : formJson(form);
       await api(path, { method: "POST", body: JSON.stringify(payload) });
-      event.currentTarget.reset();
+      form.reset();
       await refresh();
     } catch (error) {
       alert(error.message);
@@ -127,7 +128,17 @@ document.querySelector("#prune").addEventListener("click", async () => {
 
 wireForm("#agent-form", "/api/agents");
 wireForm("#workspace-form", "/api/agents/workspace");
-wireForm("#bot-form", "/api/telegram/bots");
+wireForm("#bot-form", "/api/telegram/bots", (form) => {
+  const data = formJson(form);
+  const tokenValue = data.token || "";
+  delete data.token;
+  if (/^\d+:[A-Za-z0-9_-]+$/.test(tokenValue)) {
+    data.token = tokenValue;
+  } else {
+    data.tokenEnv = tokenValue;
+  }
+  return data;
+});
 wireForm("#allow-form", "/api/telegram/allow");
 wireForm("#bind-form", "/api/agents/bind");
 wireForm("#model-form", "/api/models/allow", (form) => {

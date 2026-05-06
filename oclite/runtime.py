@@ -80,7 +80,7 @@ class TelegramPoller:
             time.sleep(2)
 
     def _poll_bot(self, account_id: str, bot: dict[str, Any]) -> None:
-        token = os.environ.get(bot.get("tokenEnv", ""))
+        token = bot.get("token") or os.environ.get(bot.get("tokenEnv", ""))
         if not token:
             return
         params = {"timeout": 1}
@@ -144,4 +144,3 @@ class TelegramPoller:
         self.store.logs_dir.mkdir(exist_ok=True)
         with (self.store.logs_dir / "runtime.jsonl").open("a", encoding="utf-8") as handle:
             handle.write(json.dumps({"ts": time.time(), **event}) + "\n")
-
