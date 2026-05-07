@@ -20,8 +20,9 @@ DEFAULT_PROVIDERS = {
     "openai-codex": {
         "apiKeyEnv": "OPENAI_API_KEY",
         "baseUrl": "https://api.openai.com/v1",
+        "codexBaseUrl": "https://chatgpt.com/backend-api/codex",
         "maxOutputTokens": 1200,
-        "timeoutSeconds": 60,
+        "timeoutSeconds": 120,
     },
 }
 

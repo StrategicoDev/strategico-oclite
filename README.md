@@ -143,6 +143,7 @@ For `openai-codex/*`, OCLite also supports the OpenAI Codex/ChatGPT subscription
 - token exchange through `https://auth.openai.com/oauth/token`
 - profile storage in `~/.oclite/auth-profiles.json`
 - automatic refresh when an OAuth profile expires
+- model calls route to `https://chatgpt.com/backend-api/codex/responses`, matching Codex CLI subscription auth
 
 In the UI, use Providers -> Start OAuth with provider `openai-codex` and profile `default`. After the browser callback completes, set provider `openai-codex` to profile `default`, then assign an `openai-codex/...` model to the agent.
 
