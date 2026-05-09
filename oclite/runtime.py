@@ -16,6 +16,29 @@ from .providers import ProviderError, ProviderRunner
 from .store import Store
 
 
+TOOL_INSTRUCTIONS = """## OCLite Runtime Tools
+
+You can operate the OCLite runtime by returning exactly one JSON object and no extra prose when a tool is needed.
+
+Available tools:
+
+1. Create an agent:
+{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","model":"openai-codex/gpt-5.5"}}
+
+2. List agents:
+{"oclite_tool":"list_agents","args":{}}
+
+3. Delegate a task:
+{"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
+
+Rules:
+- If the user asks you to create, spawn, set up, list, or delegate to an agent, use the OCLite tool JSON.
+- Do not say you lack the platform interface for these actions.
+- Keep agent ids lowercase with letters, numbers, dashes, or underscores.
+- Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
+"""
+
+
 class AgentRuntime:
     def __init__(self, store: Store):
         self.store = store
@@ -28,7 +51,7 @@ class AgentRuntime:
             if path.exists():
                 text = path.read_text(encoding="utf-8", errors="replace").strip()
                 parts.append(f"## {filename}\n{text}")
-        return "\n\n".join(parts)
+        return "\n\n".join([*parts, TOOL_INSTRUCTIONS])
 
     def run_task(self, agent: Agent, message: str, session_id: str) -> str:
         self.store.append_session_event(session_id, {"role": "user", "content": message})
@@ -47,6 +70,7 @@ class AgentRuntime:
                 )
             except ProviderError as exc:
                 response = f"Provider error: {exc}"
+        response = self._maybe_execute_tool(agent, response)
         self.store.append_session_event(session_id, {"role": "assistant", "content": response})
         return response
 
@@ -57,6 +81,64 @@ class AgentRuntime:
                 "Use Agents -> Create, assign an authorized model, then bind a Telegram bot."
             )
         return f"{agent.name} received: {message}"
+
+    def _maybe_execute_tool(self, source_agent: Agent, response: str) -> str:
+        call = self._parse_tool_call(response)
+        if not call:
+            return response
+        tool = call.get("oclite_tool")
+        args = call.get("args") or {}
+        try:
+            if tool == "create_agent":
+                agent = self.store.create_agent(args)
+                return (
+                    f"Created agent '{agent.id}' ({agent.name}).\n"
+                    f"Role: {agent.role}\n"
+                    f"Model: {agent.model}\n"
+                    f"Workspace: {agent.workspace}"
+                )
+            if tool == "list_agents":
+                agents = self.store.list_agents()
+                return "\n".join(
+                    f"- {agent.id}: {agent.name} | {agent.model} | {agent.status} | {agent.workspace}"
+                    for agent in agents
+                )
+            if tool == "delegate_task":
+                target = self.store.get_agent(args["agentId"])
+                if not target:
+                    return f"Cannot delegate: unknown agent '{args['agentId']}'."
+                session = self.store.create_or_touch_session(
+                    target,
+                    "delegate",
+                    source_agent.id,
+                    "runtime",
+                )
+                result = self.run_task(target, args.get("task", ""), session.id)
+                return f"Delegated to {target.id}.\n\n{result}"
+            return f"Unknown OCLite tool '{tool}'."
+        except Exception as exc:
+            return f"OCLite tool error: {type(exc).__name__}: {exc}"
+
+    def _parse_tool_call(self, response: str) -> dict[str, Any] | None:
+        text = response.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        try:
+            data = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+        if isinstance(data, dict) and data.get("oclite_tool"):
+            return data
+        return None
 
 class TelegramPoller:
     def __init__(self, store: Store):

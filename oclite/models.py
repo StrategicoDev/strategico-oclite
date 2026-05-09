@@ -125,7 +125,23 @@ def ensure_openclaw_workspace(path: Path, agent_name: str, role: str) -> None:
         "SOUL.md": f"# Soul\n\nYou are {agent_name}. {role}\n",
         "USER.md": "# User\n\nUse this file for user preferences and operating context.\n",
         "IDENTITY.md": f"# Identity\n\nname: {agent_name}\nrole: {role}\n",
-        "TOOLS.md": "# Tools\n\nAllowed tools are managed by OCLite runtime metadata.\n",
+        "TOOLS.md": """# Tools
+
+Allowed tools are managed by OCLite runtime metadata.
+
+## OCLite Runtime Tool Protocol
+
+When you need to operate the platform, return exactly one JSON object and no extra prose.
+
+Create an agent:
+{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","model":"openai-codex/gpt-5.5"}}
+
+List agents:
+{"oclite_tool":"list_agents","args":{}}
+
+Delegate a task:
+{"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
+""",
         "HEARTBEAT.md": "# Heartbeat\n\nNo heartbeat behavior configured yet.\n",
         "BOOT.md": "# Boot\n\nLoad workspace files, then follow the active task.\n",
         "BOOTSTRAP.md": "# Bootstrap\n\nThis workspace is ready for first-run initialization.\n",

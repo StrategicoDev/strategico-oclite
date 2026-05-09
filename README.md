@@ -103,6 +103,30 @@ BOOTSTRAP.md
 
 After that, the agent runs normally using the saved workspace context.
 
+## Runtime Tool Protocol
+
+Agents can operate OCLite by returning a single JSON tool call. The runtime executes the call and sends the result back to the user.
+
+Create an agent:
+
+```json
+{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","model":"openai-codex/gpt-5.5"}}
+```
+
+List agents:
+
+```json
+{"oclite_tool":"list_agents","args":{}}
+```
+
+Delegate a task:
+
+```json
+{"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
+```
+
+The tool contract is injected into agent context and written into new agents' `TOOLS.md`.
+
 ## Telegram Linking
 
 Telegram is the only supported MVP communication channel.
