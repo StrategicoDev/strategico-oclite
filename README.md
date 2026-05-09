@@ -12,6 +12,7 @@ The MVP keeps a deliberately small surface:
 - Lightweight filesystem sessions.
 - Minimal local control UI.
 - OpenAI-compatible provider execution through the Responses API.
+- First-contact bootstrap that asks for agent/user context and saves it into OpenClaw workspace files.
 
 ## Quick Start
 
@@ -81,6 +82,26 @@ memory/
 ```
 
 Runtime metadata lives outside those files so existing OpenClaw workspaces can be pointed at directly.
+
+## Bootstrap
+
+On first contact, each agent pauses normal model execution and asks for initial context:
+
+```text
+Agent: who I am, my role, tone, and responsibilities.
+User: who you are, what I should call you, your preferences, and what you want this OCLite instance to help with.
+```
+
+The reply is saved into:
+
+```text
+IDENTITY.md
+USER.md
+MEMORY.md
+BOOTSTRAP.md
+```
+
+After that, the agent runs normally using the saved workspace context.
 
 ## Telegram Linking
 

@@ -54,6 +54,10 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 data = self.read_json()
                 agent = self.store.set_agent_model(data["agentId"], data["model"])
                 return self.json_response(agent.to_dict())
+            if parsed.path == "/api/agents/bootstrap/reset":
+                data = self.read_json()
+                agent = self.store.reset_agent_bootstrap(data["agentId"])
+                return self.json_response(agent.to_dict())
             if parsed.path == "/api/agents/bind":
                 return self.bind_agent()
             if parsed.path == "/api/telegram/bots":

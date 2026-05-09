@@ -39,6 +39,7 @@ class Agent:
     identity: dict[str, str] = field(default_factory=dict)
     tools: list[str] = field(default_factory=list)
     bindings: list[dict[str, str]] = field(default_factory=list)
+    bootstrap: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now)
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,6 +53,7 @@ class Agent:
             "identity": self.identity,
             "tools": self.tools,
             "bindings": self.bindings,
+            "bootstrap": self.bootstrap,
             "created_at": self.created_at,
         }
 
@@ -67,6 +69,7 @@ class Agent:
             identity=data.get("identity", {}),
             tools=data.get("tools", []),
             bindings=data.get("bindings", []),
+            bootstrap=data.get("bootstrap", {}),
             created_at=data.get("created_at", utc_now()),
         )
 
@@ -132,4 +135,3 @@ def ensure_openclaw_workspace(path: Path, agent_name: str, role: str) -> None:
         target = path / filename
         if not target.exists():
             target.write_text(defaults[filename], encoding="utf-8")
-

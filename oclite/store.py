@@ -156,6 +156,14 @@ class Store:
         self.save_agent(agent)
         return agent
 
+    def reset_agent_bootstrap(self, agent_id: str) -> Agent:
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Unknown agent '{agent_id}'")
+        agent.bootstrap = {}
+        self.save_agent(agent)
+        return agent
+
     def save_provider(self, provider_id: str, data: dict[str, Any]) -> dict[str, Any]:
         provider_id = provider_id.strip()
         if not provider_id:

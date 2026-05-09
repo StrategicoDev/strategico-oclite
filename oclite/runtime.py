@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from .bootstrap import Bootstrapper
 from .models import Agent, OPENCLAW_WORKSPACE_FILES
 from .providers import ProviderError, ProviderRunner
 from .store import Store
@@ -31,6 +32,10 @@ class AgentRuntime:
 
     def run_task(self, agent: Agent, message: str, session_id: str) -> str:
         self.store.append_session_event(session_id, {"role": "user", "content": message})
+        bootstrap_response = Bootstrapper(self.store).handle(agent, message)
+        if bootstrap_response is not None:
+            self.store.append_session_event(session_id, {"role": "assistant", "content": bootstrap_response})
+            return bootstrap_response
         if agent.model == "mock:echo":
             response = self._mock_response(agent, message)
         else:

@@ -79,6 +79,7 @@ function renderAgents() {
       item(`
         <header><strong>${agent.name}</strong><span class="pill">${agent.status}</span></header>
         <small>${agent.id} · ${agent.model}</small><br />
+        <small>bootstrap: ${(agent.bootstrap && agent.bootstrap.status) || "new"}</small><br />
         <small>${agent.role}</small><br />
         <small>${agent.workspace}</small>
       `)
@@ -88,6 +89,7 @@ function renderAgents() {
   fillSelect("#task-agent", state.agents.map((agent) => agent.id));
   fillSelect("#workspace-agent", state.agents.map((agent) => agent.id));
   fillSelect("#model-agent", state.agents.map((agent) => agent.id));
+  fillSelect("#bootstrap-agent", state.agents.map((agent) => agent.id));
   fillSelect("#diagnostics-agent", state.agents.map((agent) => agent.id));
 }
 
@@ -167,6 +169,7 @@ document.querySelector("#prune").addEventListener("click", async () => {
 wireForm("#agent-form", "/api/agents");
 wireForm("#workspace-form", "/api/agents/workspace");
 wireForm("#agent-model-form", "/api/agents/model");
+wireForm("#bootstrap-reset-form", "/api/agents/bootstrap/reset");
 wireForm("#bot-form", "/api/telegram/bots", (form) => {
   const data = formJson(form);
   const tokenValue = data.token || "";
