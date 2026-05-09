@@ -13,6 +13,7 @@ The MVP keeps a deliberately small surface:
 - Minimal local control UI.
 - OpenAI-compatible provider execution through the Responses API.
 - First-contact bootstrap that asks for agent/user context and saves it into OpenClaw workspace files.
+- Recent session context is injected into each model call so agents can follow the active conversation.
 
 ## Quick Start
 
@@ -102,6 +103,12 @@ BOOTSTRAP.md
 ```
 
 After that, the agent runs normally using the saved workspace context.
+
+## Session Context
+
+OCLite stores session transcripts as JSONL and injects recent user/assistant/system messages into each model call under `Recent Session Context`.
+
+This keeps follow-up requests coherent without adding a database or long-term vector memory.
 
 ## Runtime Tool Protocol
 

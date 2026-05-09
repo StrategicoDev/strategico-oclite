@@ -363,6 +363,22 @@ class Store:
         with (self.sessions_dir / f"{session_id}.jsonl").open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event) + "\n")
 
+    def recent_session_events(self, session_id: str, limit: int = 16) -> list[dict[str, Any]]:
+        path = self.sessions_dir / f"{session_id}.jsonl"
+        if not path.exists():
+            return []
+        events: list[dict[str, Any]] = []
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if event.get("role") in {"user", "assistant", "system"} and event.get("content"):
+                events.append(event)
+        return events[-limit:]
+
     def prune_stale(self) -> int:
         config = self.config()
         from datetime import datetime, timezone, timedelta

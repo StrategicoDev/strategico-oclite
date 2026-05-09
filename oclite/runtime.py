@@ -54,7 +54,7 @@ class AgentRuntime:
     def __init__(self, store: Store):
         self.store = store
 
-    def workspace_context(self, agent: Agent) -> str:
+    def workspace_context(self, agent: Agent, recent_events: list[dict[str, Any]] | None = None) -> str:
         workspace = Path(agent.workspace)
         parts: list[str] = []
         for filename in OPENCLAW_WORKSPACE_FILES:
@@ -62,9 +62,14 @@ class AgentRuntime:
             if path.exists():
                 text = path.read_text(encoding="utf-8", errors="replace").strip()
                 parts.append(f"## {filename}\n{text}")
+        if recent_events:
+            transcript = self._format_recent_events(recent_events)
+            if transcript:
+                parts.append(f"## Recent Session Context\n{transcript}")
         return "\n\n".join([*parts, TOOL_INSTRUCTIONS, self.store.agent_registry_summary()])
 
     def run_task(self, agent: Agent, message: str, session_id: str) -> str:
+        recent_events = self.store.recent_session_events(session_id)
         self.store.append_session_event(session_id, {"role": "user", "content": message})
         bootstrap_response = Bootstrapper(self.store).handle(agent, message)
         if bootstrap_response is not None:
@@ -76,7 +81,7 @@ class AgentRuntime:
             try:
                 response = ProviderRunner(self.store.config(), self.store.home).run(
                     agent.model,
-                    self.workspace_context(agent),
+                    self.workspace_context(agent, recent_events),
                     message,
                 )
             except ProviderError as exc:
@@ -92,6 +97,18 @@ class AgentRuntime:
                 "Use Agents -> Create, assign an authorized model, then bind a Telegram bot."
             )
         return f"{agent.name} received: {message}"
+
+    def _format_recent_events(self, events: list[dict[str, Any]]) -> str:
+        lines: list[str] = []
+        for event in events:
+            role = event.get("role", "unknown")
+            content = str(event.get("content", "")).strip()
+            if not content:
+                continue
+            if len(content) > 1800:
+                content = content[:1800].rstrip() + "..."
+            lines.append(f"{role}: {content}")
+        return "\n\n".join(lines)
 
     def _maybe_execute_tool(self, source_agent: Agent, response: str) -> str:
         call = self._parse_tool_call(response)
