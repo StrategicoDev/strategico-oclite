@@ -16,6 +16,14 @@
     </header>
 
     <main>
+      <nav class="tabs" aria-label="OCLite sections">
+        <button class="tab active" data-view-target="dashboard">Dashboard</button>
+        <button class="tab" data-view-target="agents">Agents</button>
+        <button class="tab" data-view-target="models">Models</button>
+        <button class="tab" data-view-target="channels">Channels</button>
+        <button class="tab" data-view-target="sessions">Sessions</button>
+      </nav>
+
       <section class="band dashboard">
         <div>
           <span class="label">Runtime Home</span>
@@ -35,8 +43,38 @@
         </div>
       </section>
 
-      <section class="grid">
-        <article>
+      <section class="view active" data-view="dashboard">
+        <div class="grid">
+          <article>
+            <h2>Task Test</h2>
+            <form id="task-form" class="task-form">
+              <select name="agentId" id="task-agent"></select>
+              <textarea name="message" placeholder="Send a local test task to an agent"></textarea>
+              <button>Run Task</button>
+            </form>
+            <pre id="task-output"></pre>
+          </article>
+
+          <article>
+            <h2>Diagnostics</h2>
+            <form id="diagnostics-form" class="inline-form">
+              <select name="agentId" id="diagnostics-agent"></select>
+              <span></span>
+              <button>Check Agent Route</button>
+            </form>
+            <pre id="diagnostics-output"></pre>
+          </article>
+
+          <article class="wide">
+            <h2>OpenClaw Workspace Contract</h2>
+            <div id="workspace-files" class="chips"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="view" data-view="agents">
+        <div class="grid">
+          <article>
           <h2>Agents</h2>
           <form id="agent-form" class="stack">
             <input name="id" placeholder="agent id, e.g. planner" />
@@ -73,8 +111,12 @@
           </form>
           <div id="agents" class="list"></div>
         </article>
+        </div>
+      </section>
 
-        <article>
+      <section class="view" data-view="channels">
+        <div class="grid">
+          <article class="wide">
           <h2>Telegram</h2>
           <form id="bot-form" class="inline-form">
             <input name="accountId" placeholder="bot id, e.g. main-bot" />
@@ -92,8 +134,12 @@
           </form>
           <div id="telegram" class="list"></div>
         </article>
+        </div>
+      </section>
 
-        <article>
+      <section class="view" data-view="models">
+        <div class="grid">
+          <article>
           <h2>Models</h2>
           <form id="model-form" class="inline-form">
             <select name="providerId" id="model-provider"></select>
@@ -136,37 +182,17 @@
           <div id="auth-profiles" class="list"></div>
           <div id="providers" class="list"></div>
         </article>
+        </div>
+      </section>
 
-        <article>
+      <section class="view" data-view="sessions">
+        <div class="grid">
+          <article class="wide">
           <h2>Sessions</h2>
           <button id="prune">Mark Stale</button>
           <div id="sessions" class="list"></div>
         </article>
-
-        <article class="wide">
-          <h2>Task Test</h2>
-          <form id="task-form" class="task-form">
-            <select name="agentId" id="task-agent"></select>
-            <textarea name="message" placeholder="Send a local test task to an agent"></textarea>
-            <button>Run Task</button>
-          </form>
-          <pre id="task-output"></pre>
-        </article>
-
-        <article class="wide">
-          <h2>Diagnostics</h2>
-          <form id="diagnostics-form" class="inline-form">
-            <select name="agentId" id="diagnostics-agent"></select>
-            <span></span>
-            <button>Check Agent Route</button>
-          </form>
-          <pre id="diagnostics-output"></pre>
-        </article>
-
-        <article class="wide">
-          <h2>OpenClaw Workspace Contract</h2>
-          <div id="workspace-files" class="chips"></div>
-        </article>
+        </div>
       </section>
     </main>
 

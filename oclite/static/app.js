@@ -1,4 +1,5 @@
 let state = null;
+let activeView = "dashboard";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -27,6 +28,17 @@ function render() {
   renderTelegram();
   renderSessions();
   renderWorkspaceFiles();
+  showView(activeView);
+}
+
+function showView(name) {
+  activeView = name;
+  document.querySelectorAll("[data-view]").forEach((view) => {
+    view.classList.toggle("active", view.dataset.view === name);
+  });
+  document.querySelectorAll("[data-view-target]").forEach((tab) => {
+    tab.classList.toggle("active", tab.dataset.viewTarget === name);
+  });
 }
 
 function renderModels() {
@@ -163,6 +175,9 @@ function wireForm(selector, path, transform) {
 }
 
 document.querySelector("#refresh").addEventListener("click", refresh);
+document.querySelectorAll("[data-view-target]").forEach((tab) => {
+  tab.addEventListener("click", () => showView(tab.dataset.viewTarget));
+});
 document.querySelector("#prune").addEventListener("click", async () => {
   await api("/api/sessions/prune", { method: "POST", body: "{}" });
   await refresh();
