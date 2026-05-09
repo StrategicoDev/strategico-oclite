@@ -253,6 +253,7 @@ class ProviderRunner:
 
     def _extract_stream_text(self, raw: str) -> str:
         deltas: list[str] = []
+        final_items: list[str] = []
         completed: dict[str, Any] | None = None
         event_name = ""
         for line in raw.splitlines():
@@ -280,15 +281,17 @@ class ProviderRunner:
                 elif event.get("text"):
                     deltas.append(event["text"])
             elif event_type == "response.output_item.done":
-                deltas.extend(self._extract_texts_from_item(event.get("item")))
+                final_items.extend(self._extract_texts_from_item(event.get("item")))
             elif event_type == "response.content_part.done":
-                deltas.extend(self._extract_texts_from_item({"content": [event.get("part", {})]}))
+                final_items.extend(self._extract_texts_from_item({"content": [event.get("part", {})]}))
             elif event_type == "response.output_item.added":
-                deltas.extend(self._extract_texts_from_item(event.get("item")))
+                final_items.extend(self._extract_texts_from_item(event.get("item")))
             elif event_type == "response.completed" and isinstance(event.get("response"), dict):
                 completed = event["response"]
         if deltas:
-            return "".join(deltas).strip()
+            return self._dedupe_repeated_text("".join(deltas).strip())
+        if final_items:
+            return self._dedupe_repeated_text("\n".join(self._unique_texts(final_items)).strip())
         if completed:
             return self._extract_text(completed)
         raise ProviderError("Provider returned no streamed text output")
@@ -301,3 +304,22 @@ class ProviderRunner:
             if content.get("text"):
                 texts.append(content["text"])
         return texts
+
+    def _unique_texts(self, texts: list[str]) -> list[str]:
+        seen: set[str] = set()
+        unique: list[str] = []
+        for text in texts:
+            cleaned = text.strip()
+            if cleaned and cleaned not in seen:
+                seen.add(cleaned)
+                unique.append(cleaned)
+        return unique
+
+    def _dedupe_repeated_text(self, text: str) -> str:
+        for parts in range(2, 5):
+            if len(text) % parts:
+                continue
+            chunk = text[: len(text) // parts]
+            if chunk and chunk * parts == text:
+                return chunk.strip()
+        return text
