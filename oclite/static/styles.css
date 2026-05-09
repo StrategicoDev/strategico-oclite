@@ -54,6 +54,7 @@ h2 {
 
 p,
 .label,
+.field-label,
 small {
   color: var(--muted);
 }
@@ -116,6 +117,11 @@ main {
   display: block;
   font-size: 12px;
   margin-bottom: 4px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
 }
 
 strong {

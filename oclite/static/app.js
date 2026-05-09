@@ -133,6 +133,7 @@ function renderAgents() {
         <header><strong>${agent.name}</strong><span class="pill">${agent.id === selectedAgentId ? "selected" : agent.status}</span></header>
         <small>${agent.id} · ${agent.model}</small><br />
         <small>bootstrap: ${(agent.bootstrap && agent.bootstrap.status) || "new"}</small><br />
+        <small>context: ${recentTurns(agent)} recent messages</small><br />
         <small>${agent.role}</small><br />
         <small>${agent.workspace}</small>
       `)
@@ -156,10 +157,11 @@ function sortedAgents() {
 
 function setAgentFormTargets(agent) {
   const id = agent ? agent.id : "";
-  ["#workspace-agent", "#model-agent", "#bootstrap-agent", "#seed-agent", "#delete-agent"].forEach((selector) => {
+  ["#workspace-agent", "#model-agent", "#context-agent", "#bootstrap-agent", "#seed-agent", "#delete-agent"].forEach((selector) => {
     document.querySelector(selector).value = id;
   });
   document.querySelector("#set-agent-model").value = agent ? agent.model : state.config.models.default;
+  document.querySelector("#context-recent-turns").value = agent ? recentTurns(agent) : 16;
   document.querySelector("#agent-delete-form button").disabled = id === "main" || !id;
 }
 
@@ -173,10 +175,16 @@ function renderSelectedAgentSummary(agent) {
     <div><span class="label">Name</span><strong>${agent.name}</strong></div>
     <div><span class="label">Role</span><strong>${agent.role}</strong></div>
     <div><span class="label">Model</span><strong>${agent.model}</strong></div>
+    <div><span class="label">Context Window</span><strong>${recentTurns(agent)} recent messages</strong></div>
     <div><span class="label">Bootstrap</span><strong>${(agent.bootstrap && agent.bootstrap.status) || "new"}</strong></div>
     <div><span class="label">Bindings</span><strong>${bindings}</strong></div>
     <div><span class="label">Workspace</span><strong>${agent.workspace}</strong></div>
   `;
+}
+
+function recentTurns(agent) {
+  const value = agent && agent.context ? Number(agent.context.recentTurns) : 16;
+  return Number.isFinite(value) ? value : 16;
 }
 
 function renderTelegram() {
@@ -294,6 +302,11 @@ document.querySelector("#prune").addEventListener("click", async () => {
 wireForm("#agent-form", "/api/agents");
 wireForm("#workspace-form", "/api/agents/workspace");
 wireForm("#agent-model-form", "/api/agents/model");
+wireForm("#agent-context-form", "/api/agents/context", (form) => {
+  const data = formJson(form);
+  data.recentTurns = Math.max(0, Math.min(Number(data.recentTurns || 16), 100));
+  return data;
+});
 wireForm("#bootstrap-reset-form", "/api/agents/bootstrap/reset");
 wireForm("#agent-seed-form", "/api/agents/seed");
 wireForm("#agent-delete-form", "/api/agents/delete", (form) => {

@@ -40,6 +40,7 @@ class Agent:
     tools: list[str] = field(default_factory=list)
     bindings: list[dict[str, str]] = field(default_factory=list)
     bootstrap: dict[str, Any] = field(default_factory=dict)
+    context: dict[str, Any] = field(default_factory=lambda: {"recentTurns": 16})
     created_at: str = field(default_factory=utc_now)
 
     def to_dict(self) -> dict[str, Any]:
@@ -54,6 +55,7 @@ class Agent:
             "tools": self.tools,
             "bindings": self.bindings,
             "bootstrap": self.bootstrap,
+            "context": self.context,
             "created_at": self.created_at,
         }
 
@@ -70,6 +72,7 @@ class Agent:
             tools=data.get("tools", []),
             bindings=data.get("bindings", []),
             bootstrap=data.get("bootstrap", {}),
+            context=data.get("context", {"recentTurns": 16}),
             created_at=data.get("created_at", utc_now()),
         )
 

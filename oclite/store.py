@@ -156,6 +156,15 @@ class Store:
         self.save_agent(agent)
         return agent
 
+    def set_agent_context(self, agent_id: str, recent_turns: int) -> Agent:
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Unknown agent '{agent_id}'")
+        recent_turns = max(0, min(int(recent_turns), 100))
+        agent.context = {**(agent.context or {}), "recentTurns": recent_turns}
+        self.save_agent(agent)
+        return agent
+
     def reset_agent_bootstrap(self, agent_id: str) -> Agent:
         agent = self.get_agent(agent_id)
         if not agent:
@@ -364,6 +373,9 @@ class Store:
             handle.write(json.dumps(event) + "\n")
 
     def recent_session_events(self, session_id: str, limit: int = 16) -> list[dict[str, Any]]:
+        limit = max(0, int(limit))
+        if limit == 0:
+            return []
         path = self.sessions_dir / f"{session_id}.jsonl"
         if not path.exists():
             return []

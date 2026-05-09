@@ -108,6 +108,8 @@ After that, the agent runs normally using the saved workspace context.
 
 OCLite stores session transcripts as JSONL and injects recent user/assistant/system messages into each model call under `Recent Session Context`.
 
+Each agent has its own context window setting. The default is 16 recent messages, and it can be changed from Agents -> Conversation Context.
+
 This keeps follow-up requests coherent without adding a database or long-term vector memory.
 
 ## Runtime Tool Protocol

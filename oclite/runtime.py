@@ -69,7 +69,8 @@ class AgentRuntime:
         return "\n\n".join([*parts, TOOL_INSTRUCTIONS, self.store.agent_registry_summary()])
 
     def run_task(self, agent: Agent, message: str, session_id: str) -> str:
-        recent_events = self.store.recent_session_events(session_id)
+        recent_limit = int((agent.context or {}).get("recentTurns", 16))
+        recent_events = self.store.recent_session_events(session_id, recent_limit)
         self.store.append_session_event(session_id, {"role": "user", "content": message})
         bootstrap_response = Bootstrapper(self.store).handle(agent, message)
         if bootstrap_response is not None:
