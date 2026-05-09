@@ -164,6 +164,57 @@ class Store:
         self.save_agent(agent)
         return agent
 
+    def delete_agent(self, agent_id: str, delete_workspace: bool = False) -> dict[str, Any]:
+        if agent_id == self.config()["runtime"].get("defaultAgent", "main"):
+            raise ValueError("Cannot delete the default orchestrator agent")
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Unknown agent '{agent_id}'")
+        agent_path = self.agents_dir / f"{agent_id}.json"
+        if agent_path.exists():
+            agent_path.unlink()
+        if delete_workspace:
+            workspace = Path(agent.workspace).resolve()
+            root = self.workspaces_dir.resolve()
+            if root in workspace.parents or workspace == root / agent_id:
+                import shutil
+
+                shutil.rmtree(workspace, ignore_errors=True)
+            else:
+                raise ValueError("Refusing to delete workspace outside OCLite workspaces directory")
+        return {"deleted": agent_id, "workspaceDeleted": delete_workspace}
+
+    def seed_agent(self, agent_id: str, user: str | None = None, what: str | None = None) -> Agent:
+        agent = self.get_agent(agent_id)
+        if not agent:
+            raise ValueError(f"Unknown agent '{agent_id}'")
+        workspace = Path(agent.workspace)
+        self._seed_agent_context(
+            workspace,
+            agent,
+            user or self._main_user_context(),
+            what or self._default_agent_what(agent.name, agent.role),
+        )
+        agent.bootstrap = {
+            "status": "complete",
+            "phase": "complete",
+            "completedAt": utc_now(),
+            "source": "seed_agent",
+        }
+        self.save_agent(agent)
+        return agent
+
+    def agent_registry_summary(self) -> str:
+        lines = ["## Live OCLite Agent Registry"]
+        for agent in self.list_agents():
+            bootstrap = (agent.bootstrap or {}).get("status", "new")
+            bindings = ", ".join(f"{b.get('channel')}:{b.get('accountId')}" for b in agent.bindings) or "none"
+            lines.append(
+                f"- {agent.id}: {agent.name} | role={agent.role} | model={agent.model} | "
+                f"status={agent.status} | bootstrap={bootstrap} | bindings={bindings} | workspace={agent.workspace}"
+            )
+        return "\n".join(lines)
+
     def save_provider(self, provider_id: str, data: dict[str, Any]) -> dict[str, Any]:
         provider_id = provider_id.strip()
         if not provider_id:

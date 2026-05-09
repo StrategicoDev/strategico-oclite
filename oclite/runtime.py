@@ -28,12 +28,19 @@ Available tools:
 2. List agents:
 {"oclite_tool":"list_agents","args":{}}
 
-3. Delegate a task:
+3. Delete an agent:
+{"oclite_tool":"delete_agent","args":{"agentId":"researcher","deleteWorkspace":false}}
+
+4. Seed/bootstrap an existing agent:
+{"oclite_tool":"seed_agent","args":{"agentId":"researcher","what":"A focused research agent with a precise, source-aware style."}}
+
+5. Delegate a task:
 {"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
 
 Rules:
 - If the user asks you to create, spawn, set up, list, or delegate to an agent, use the OCLite tool JSON.
 - Do not say you lack the platform interface for these actions.
+- Only the orchestrator/default agent may create, delete, or seed delegate agents.
 - Keep agent ids lowercase with letters, numbers, dashes, or underscores.
 - Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
 - Before creating an agent, ask for or infer:
@@ -55,7 +62,7 @@ class AgentRuntime:
             if path.exists():
                 text = path.read_text(encoding="utf-8", errors="replace").strip()
                 parts.append(f"## {filename}\n{text}")
-        return "\n\n".join([*parts, TOOL_INSTRUCTIONS])
+        return "\n\n".join([*parts, TOOL_INSTRUCTIONS, self.store.agent_registry_summary()])
 
     def run_task(self, agent: Agent, message: str, session_id: str) -> str:
         self.store.append_session_event(session_id, {"role": "user", "content": message})
@@ -94,6 +101,8 @@ class AgentRuntime:
         args = call.get("args") or {}
         try:
             if tool == "create_agent":
+                if not self._is_orchestrator(source_agent):
+                    return "Only the orchestrator agent can create delegate agents."
                 agent = self.store.create_agent(args)
                 return (
                     f"Created agent '{agent.id}' ({agent.name}).\n"
@@ -104,9 +113,20 @@ class AgentRuntime:
             if tool == "list_agents":
                 agents = self.store.list_agents()
                 return "\n".join(
-                    f"- {agent.id}: {agent.name} | {agent.model} | {agent.status} | {agent.workspace}"
+                    f"- {agent.id}: {agent.name} | {agent.model} | {agent.status} | "
+                    f"bootstrap={(agent.bootstrap or {}).get('status', 'new')} | {agent.workspace}"
                     for agent in agents
                 )
+            if tool == "delete_agent":
+                if not self._is_orchestrator(source_agent):
+                    return "Only the orchestrator agent can delete delegate agents."
+                result = self.store.delete_agent(args["agentId"], bool(args.get("deleteWorkspace", False)))
+                return f"Deleted agent '{result['deleted']}'. Workspace deleted: {result['workspaceDeleted']}."
+            if tool == "seed_agent":
+                if not self._is_orchestrator(source_agent):
+                    return "Only the orchestrator agent can seed delegate agents."
+                agent = self.store.seed_agent(args["agentId"], args.get("user"), args.get("what"))
+                return f"Seeded agent '{agent.id}' and marked bootstrap complete."
             if tool == "delegate_task":
                 target = self.store.get_agent(args["agentId"])
                 if not target:
@@ -143,6 +163,9 @@ class AgentRuntime:
         if isinstance(data, dict) and data.get("oclite_tool"):
             return data
         return None
+
+    def _is_orchestrator(self, agent: Agent) -> bool:
+        return agent.id == self.store.config()["runtime"].get("defaultAgent", "main")
 
 class TelegramPoller:
     def __init__(self, store: Store):

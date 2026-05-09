@@ -61,6 +61,16 @@
             <span></span>
             <button>Reset Bootstrap</button>
           </form>
+          <form id="agent-seed-form" class="inline-form">
+            <select name="agentId" id="seed-agent"></select>
+            <input name="what" placeholder="seed role/personality/style, optional" />
+            <button>Seed</button>
+          </form>
+          <form id="agent-delete-form" class="inline-form">
+            <select name="agentId" id="delete-agent"></select>
+            <label class="check"><input name="deleteWorkspace" type="checkbox" /> workspace</label>
+            <button>Delete Agent</button>
+          </form>
           <div id="agents" class="list"></div>
         </article>
 

@@ -135,6 +135,10 @@ Delegate a task:
 
 The tool contract is injected into agent context and written into new agents' `TOOLS.md`.
 
+OCLite injects a live agent registry on every turn, including model, status, bootstrap state, bindings, and workspace path.
+
+Only the default orchestrator agent may create, delete, or seed delegate agents.
+
 ## Telegram Linking
 
 Telegram is the only supported MVP communication channel.

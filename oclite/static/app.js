@@ -90,6 +90,8 @@ function renderAgents() {
   fillSelect("#workspace-agent", state.agents.map((agent) => agent.id));
   fillSelect("#model-agent", state.agents.map((agent) => agent.id));
   fillSelect("#bootstrap-agent", state.agents.map((agent) => agent.id));
+  fillSelect("#seed-agent", state.agents.map((agent) => agent.id));
+  fillSelect("#delete-agent", state.agents.filter((agent) => agent.id !== "main").map((agent) => agent.id));
   fillSelect("#diagnostics-agent", state.agents.map((agent) => agent.id));
 }
 
@@ -170,6 +172,12 @@ wireForm("#agent-form", "/api/agents");
 wireForm("#workspace-form", "/api/agents/workspace");
 wireForm("#agent-model-form", "/api/agents/model");
 wireForm("#bootstrap-reset-form", "/api/agents/bootstrap/reset");
+wireForm("#agent-seed-form", "/api/agents/seed");
+wireForm("#agent-delete-form", "/api/agents/delete", (form) => {
+  const data = formJson(form);
+  data.deleteWorkspace = form.elements.deleteWorkspace.checked;
+  return data;
+});
 wireForm("#bot-form", "/api/telegram/bots", (form) => {
   const data = formJson(form);
   const tokenValue = data.token || "";

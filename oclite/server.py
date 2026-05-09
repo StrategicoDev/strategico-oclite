@@ -58,6 +58,14 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 data = self.read_json()
                 agent = self.store.reset_agent_bootstrap(data["agentId"])
                 return self.json_response(agent.to_dict())
+            if parsed.path == "/api/agents/seed":
+                data = self.read_json()
+                agent = self.store.seed_agent(data["agentId"], data.get("user"), data.get("what"))
+                return self.json_response(agent.to_dict())
+            if parsed.path == "/api/agents/delete":
+                data = self.read_json()
+                result = self.store.delete_agent(data["agentId"], bool(data.get("deleteWorkspace", False)))
+                return self.json_response(result)
             if parsed.path == "/api/agents/bind":
                 return self.bind_agent()
             if parsed.path == "/api/telegram/bots":

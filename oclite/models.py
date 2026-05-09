@@ -141,6 +141,8 @@ List agents:
 
 Delegate a task:
 {"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
+
+Only the orchestrator/default agent may create, delete, or seed delegate agents.
 """,
         "HEARTBEAT.md": "# Heartbeat\n\nNo heartbeat behavior configured yet.\n",
         "BOOT.md": "# Boot\n\nLoad workspace files, then follow the active task.\n",
