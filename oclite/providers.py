@@ -232,8 +232,17 @@ class ProviderRunner:
     def _read_response(self, response: Any) -> str:
         content_type = response.headers.get("content-type", "")
         raw = response.read().decode("utf-8", errors="replace")
+        status = getattr(response, "status", 200)
+        if not raw.strip():
+            raise ProviderError(f"Provider returned empty response body with HTTP {status} and content-type '{content_type}'")
         if "text/event-stream" not in content_type and not raw.lstrip().startswith("data:"):
-            return self._extract_text(json.loads(raw))
+            try:
+                return self._extract_text(json.loads(raw))
+            except json.JSONDecodeError as exc:
+                preview = raw[:500].replace("\n", "\\n")
+                raise ProviderError(
+                    f"Provider returned non-JSON response with HTTP {status}, content-type '{content_type}': {preview}"
+                ) from exc
         return self._extract_stream_text(raw)
 
     def _extract_stream_text(self, raw: str) -> str:

@@ -117,7 +117,11 @@ class TelegramPoller:
             self._send(token, chat_id, f"Bot '{account_id}' is not bound to an agent yet.")
             return
         session = self.store.create_or_touch_session(agent, "telegram", account_id, sender_id)
-        response = self.runtime.run_task(agent, text, session.id)
+        try:
+            response = self.runtime.run_task(agent, text, session.id)
+        except Exception as exc:
+            response = f"Runtime error: {type(exc).__name__}: {exc}"
+            self.store.append_session_event(session.id, {"role": "system", "content": response})
         self._send(token, chat_id, response)
 
     def _agent_for_bot(self, account_id: str) -> Agent | None:
