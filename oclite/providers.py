@@ -150,7 +150,17 @@ class ProviderRunner:
         body = {
             "model": ref.model,
             "instructions": instructions[:32000],
-            "input": message,
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": message,
+                        }
+                    ],
+                }
+            ],
             "store": False,
             "stream": True,
         }
