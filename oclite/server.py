@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import subprocess
+import sys
+import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -82,6 +86,10 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 return self.start_oauth()
             if parsed.path == "/api/oauth/complete":
                 return self.complete_oauth()
+            if parsed.path == "/api/system/update":
+                return self.system_update()
+            if parsed.path == "/api/system/restart":
+                return self.system_restart()
             if parsed.path == "/api/sessions/prune":
                 count = self.store.prune_stale()
                 return self.json_response({"pruned": count})
@@ -219,6 +227,38 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         response = self.runtime.run_task(agent, data.get("message", ""), session.id)
         self.json_response({"response": response, "session": session.to_dict()})
 
+    def system_update(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        if not (root / ".git").exists():
+            return self.json_response(
+                {
+                    "ok": False,
+                    "root": str(root),
+                    "output": "OCLite source directory is not a git checkout.",
+                },
+                400,
+            )
+        result = subprocess.run(
+            ["git", "-C", str(root), "pull", "--ff-only"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        output = "\n".join(part for part in [result.stdout.strip(), result.stderr.strip()] if part)
+        self.json_response(
+            {
+                "ok": result.returncode == 0,
+                "root": str(root),
+                "returnCode": result.returncode,
+                "output": output or "No output.",
+            },
+            200 if result.returncode == 0 else 500,
+        )
+
+    def system_restart(self) -> None:
+        self.json_response({"ok": True, "message": "Restarting OCLite gateway."})
+        threading.Timer(0.5, restart_process).start()
+
     def read_json(self) -> dict:
         length = int(self.headers.get("content-length", "0"))
         if length == 0:
@@ -265,6 +305,11 @@ def run_server(host: str, port: int, poll_telegram: bool = True) -> None:
         server.serve_forever()
     finally:
         poller.stop()
+
+
+def restart_process() -> None:
+    args = [sys.executable, *sys.argv]
+    os.execv(sys.executable, args)
 
 
 def main() -> None:

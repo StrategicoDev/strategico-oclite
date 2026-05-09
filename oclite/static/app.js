@@ -175,6 +175,33 @@ function wireForm(selector, path, transform) {
 }
 
 document.querySelector("#refresh").addEventListener("click", refresh);
+document.querySelector("#update-gateway").addEventListener("click", async () => {
+  const button = document.querySelector("#update-gateway");
+  button.disabled = true;
+  button.textContent = "Updating...";
+  try {
+    const result = await api("/api/system/update", { method: "POST", body: "{}" });
+    alert(result.output || "OCLite updated.");
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Update";
+  }
+});
+document.querySelector("#restart-gateway").addEventListener("click", async () => {
+  const button = document.querySelector("#restart-gateway");
+  button.disabled = true;
+  button.textContent = "Restarting...";
+  try {
+    await api("/api/system/restart", { method: "POST", body: "{}" });
+    setTimeout(() => window.location.reload(), 1800);
+  } catch (error) {
+    alert(error.message);
+    button.disabled = false;
+    button.textContent = "Restart Gateway";
+  }
+});
 document.querySelectorAll("[data-view-target]").forEach((tab) => {
   tab.addEventListener("click", () => showView(tab.dataset.viewTarget));
 });

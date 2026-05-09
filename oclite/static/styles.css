@@ -30,6 +30,13 @@ body {
   background: #ffffff;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 h1,
 h2,
 p {
@@ -179,6 +186,16 @@ button {
 
 button:hover {
   background: var(--accent-dark);
+}
+
+button.secondary {
+  background: #ffffff;
+  color: var(--accent-dark);
+  border-color: var(--line);
+}
+
+button.secondary:hover {
+  background: #e9f6f4;
 }
 
 .check {
