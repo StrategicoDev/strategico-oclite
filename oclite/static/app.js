@@ -253,7 +253,8 @@ document.querySelector("#update-gateway").addEventListener("click", async () => 
   button.textContent = "Updating...";
   try {
     const result = await api("/api/system/update", { method: "POST", body: "{}" });
-    alert(result.output || "OCLite updated.");
+    console.info("OCLite update output:", result.output || result);
+    alert("Update Completed. Restart the gateway");
   } catch (error) {
     alert(error.message);
   } finally {
