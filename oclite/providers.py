@@ -78,10 +78,35 @@ class ProviderRunner:
         models = [item.get("id") for item in data.get("data", []) if item.get("id")]
         return {"ok": True, "providerId": provider_id, "modelCount": len(models), "models": models[:25]}
 
+    def diagnostics(self, model: str) -> dict[str, Any]:
+        ref = parse_model_ref(model)
+        provider_config = self._provider_config(ref.provider)
+        profile = self._oauth_profile(ref.provider, provider_config)
+        has_api_key = bool(provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY")))
+        auth_type = "oauth" if profile else "api-key" if has_api_key else "missing"
+        if ref.provider == "openai-codex" and profile:
+            endpoint = f"{provider_config.get('codexBaseUrl', 'https://chatgpt.com/backend-api/codex').rstrip('/')}/responses"
+        else:
+            endpoint = f"{provider_config.get('baseUrl', 'https://api.openai.com/v1').rstrip('/')}/responses"
+        return {
+            "provider": ref.provider,
+            "model": ref.model,
+            "authType": auth_type,
+            "profileId": provider_config.get("profileId", "default"),
+            "oauthProfileFound": bool(profile),
+            "apiKeyConfigured": has_api_key,
+            "endpoint": endpoint,
+        }
+
     def _openai_response(self, ref: ModelRef, instructions: str, message: str) -> str:
         provider_config = self._provider_config(ref.provider)
         if ref.provider == "openai-codex" and self._oauth_profile(ref.provider, provider_config):
             return self._codex_oauth_response(ref, provider_config, instructions, message)
+        if ref.provider == "openai-codex" and not provider_config.get("apiKey"):
+            raise ProviderError(
+                "openai-codex is configured without an OAuth profile. "
+                "Use Providers -> Start OAuth, then save provider openai-codex with profile id 'default'."
+            )
         credential = self._credential(ref.provider, provider_config)
         if not credential:
             raise ProviderError(

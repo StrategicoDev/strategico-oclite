@@ -88,6 +88,7 @@ function renderAgents() {
   fillSelect("#task-agent", state.agents.map((agent) => agent.id));
   fillSelect("#workspace-agent", state.agents.map((agent) => agent.id));
   fillSelect("#model-agent", state.agents.map((agent) => agent.id));
+  fillSelect("#diagnostics-agent", state.agents.map((agent) => agent.id));
 }
 
 function renderTelegram() {
@@ -232,6 +233,17 @@ document.querySelector("#oauth-complete-form").addEventListener("submit", async 
     await refresh();
   } catch (error) {
     document.querySelector("#oauth-output").textContent = error.message;
+  }
+});
+
+document.querySelector("#diagnostics-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const params = new URLSearchParams(formJson(event.currentTarget));
+  try {
+    const result = await api(`/api/diagnostics/agent?${params.toString()}`);
+    document.querySelector("#diagnostics-output").textContent = JSON.stringify(result, null, 2);
+  } catch (error) {
+    document.querySelector("#diagnostics-output").textContent = error.message;
   }
 });
 

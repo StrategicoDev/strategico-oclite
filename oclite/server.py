@@ -30,6 +30,9 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             return self.json_response(self.store.list_sessions())
         if parsed.path == "/api/auth/profiles":
             return self.json_response(AuthStore(self.store.home).list_profiles())
+        if parsed.path == "/api/diagnostics/agent":
+            query = parse_qs(parsed.query)
+            return self.agent_diagnostics(query.get("agentId", ["main"])[0])
         if parsed.path == "/" or not parsed.path.startswith("/api/"):
             return self.serve_static(parsed.path)
         self.send_error(404)
@@ -187,6 +190,13 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         data = self.read_json()
         result = complete_openai_codex_oauth(self.store.home, data["code"], data["state"])
         self.json_response(result)
+
+    def agent_diagnostics(self, agent_id: str) -> None:
+        agent = self.store.get_agent(agent_id)
+        if not agent:
+            raise ValueError("Unknown agent")
+        diag = ProviderRunner(self.store.config(), self.store.home).diagnostics(agent.model)
+        self.json_response({"agentId": agent.id, "agentModel": agent.model, **diag})
 
     def run_task(self) -> None:
         data = self.read_json()
