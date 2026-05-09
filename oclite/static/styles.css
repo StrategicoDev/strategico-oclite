@@ -59,7 +59,7 @@ small {
 }
 
 main {
-  padding: 24px clamp(16px, 4vw, 48px) 48px;
+  padding: 24px 14px 48px;
 }
 
 .tabs {
@@ -131,6 +131,33 @@ strong {
 
 .summary-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.page-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.agent-sections {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.agent-selector-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 520px) auto;
+  justify-content: start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.selected-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.selected-summary div {
+  min-width: 0;
 }
 
 article {
@@ -274,8 +301,11 @@ pre {
 @media (max-width: 900px) {
   .dashboard,
   .summary-grid,
+  .agent-sections,
+  .selected-summary,
   .grid,
   .inline-form,
+  .agent-selector-row,
   .task-form {
     grid-template-columns: 1fr;
   }

@@ -1,5 +1,6 @@
 let state = null;
 let activeView = "dashboard";
+let selectedAgentId = "main";
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -121,10 +122,15 @@ async function renderAuthProfiles() {
 }
 
 function renderAgents() {
-  document.querySelector("#agents").innerHTML = state.agents
+  const agents = sortedAgents();
+  if (!agents.some((agent) => agent.id === selectedAgentId)) {
+    selectedAgentId = agents[0] ? agents[0].id : "main";
+  }
+  const selected = agents.find((agent) => agent.id === selectedAgentId);
+  document.querySelector("#agents").innerHTML = agents
     .map((agent) =>
       item(`
-        <header><strong>${agent.name}</strong><span class="pill">${agent.status}</span></header>
+        <header><strong>${agent.name}</strong><span class="pill">${agent.id === selectedAgentId ? "selected" : agent.status}</span></header>
         <small>${agent.id} · ${agent.model}</small><br />
         <small>bootstrap: ${(agent.bootstrap && agent.bootstrap.status) || "new"}</small><br />
         <small>${agent.role}</small><br />
@@ -132,14 +138,45 @@ function renderAgents() {
       `)
     )
     .join("");
-  fillSelect("#bind-agent", state.agents.map((agent) => agent.id));
-  fillSelect("#task-agent", state.agents.map((agent) => agent.id));
-  fillSelect("#workspace-agent", state.agents.map((agent) => agent.id));
-  fillSelect("#model-agent", state.agents.map((agent) => agent.id));
-  fillSelect("#bootstrap-agent", state.agents.map((agent) => agent.id));
-  fillSelect("#seed-agent", state.agents.map((agent) => agent.id));
-  fillSelect("#delete-agent", state.agents.filter((agent) => agent.id !== "main").map((agent) => agent.id));
-  fillSelect("#diagnostics-agent", state.agents.map((agent) => agent.id));
+  fillSelect("#selected-agent", agents.map((agent) => agent.id), selectedAgentId);
+  fillSelect("#bind-agent", agents.map((agent) => agent.id));
+  fillSelect("#task-agent", agents.map((agent) => agent.id));
+  fillSelect("#diagnostics-agent", agents.map((agent) => agent.id));
+  setAgentFormTargets(selected);
+  renderSelectedAgentSummary(selected);
+}
+
+function sortedAgents() {
+  return [...(state.agents || [])].sort((a, b) => {
+    if (a.id === "main") return -1;
+    if (b.id === "main") return 1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function setAgentFormTargets(agent) {
+  const id = agent ? agent.id : "";
+  ["#workspace-agent", "#model-agent", "#bootstrap-agent", "#seed-agent", "#delete-agent"].forEach((selector) => {
+    document.querySelector(selector).value = id;
+  });
+  document.querySelector("#set-agent-model").value = agent ? agent.model : state.config.models.default;
+  document.querySelector("#agent-delete-form button").disabled = id === "main" || !id;
+}
+
+function renderSelectedAgentSummary(agent) {
+  if (!agent) {
+    document.querySelector("#selected-agent-summary").innerHTML = "<small>No agents found</small>";
+    return;
+  }
+  const bindings = (agent.bindings || []).map((binding) => `${binding.channel}:${binding.accountId}`).join(", ") || "none";
+  document.querySelector("#selected-agent-summary").innerHTML = `
+    <div><span class="label">Name</span><strong>${agent.name}</strong></div>
+    <div><span class="label">Role</span><strong>${agent.role}</strong></div>
+    <div><span class="label">Model</span><strong>${agent.model}</strong></div>
+    <div><span class="label">Bootstrap</span><strong>${(agent.bootstrap && agent.bootstrap.status) || "new"}</strong></div>
+    <div><span class="label">Bindings</span><strong>${bindings}</strong></div>
+    <div><span class="label">Workspace</span><strong>${agent.workspace}</strong></div>
+  `;
 }
 
 function renderTelegram() {
@@ -239,6 +276,14 @@ document.querySelector("#restart-gateway").addEventListener("click", async () =>
 });
 document.querySelectorAll("[data-view-target]").forEach((tab) => {
   tab.addEventListener("click", () => showView(tab.dataset.viewTarget));
+});
+document.querySelector("#selected-agent").addEventListener("change", (event) => {
+  selectedAgentId = event.currentTarget.value;
+  renderAgents();
+});
+document.querySelector("#select-main-agent").addEventListener("click", () => {
+  selectedAgentId = "main";
+  renderAgents();
 });
 document.querySelector("#prune").addEventListener("click", async () => {
   await api("/api/sessions/prune", { method: "POST", body: "{}" });

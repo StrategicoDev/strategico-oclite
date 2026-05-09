@@ -81,44 +81,74 @@
       </section>
 
       <section class="view" data-view="agents">
-        <div class="grid">
-          <article>
-          <h2>Agents</h2>
-          <form id="agent-form" class="stack">
-            <input name="id" placeholder="agent id, e.g. planner" />
-            <input name="name" placeholder="display name" />
-            <input name="role" placeholder="role / identity" />
-            <input name="workspace" placeholder="existing OpenClaw workspace path, optional" />
-            <select name="model" id="agent-model"></select>
-            <button>Create Agent</button>
-          </form>
-          <form id="workspace-form" class="inline-form">
-            <select name="agentId" id="workspace-agent"></select>
-            <input name="workspace" placeholder="point agent at existing OpenClaw workspace" />
-            <button>Attach</button>
-          </form>
-          <form id="agent-model-form" class="inline-form">
-            <select name="agentId" id="model-agent"></select>
-            <select name="model" id="set-agent-model"></select>
-            <button>Set Model</button>
-          </form>
-          <form id="bootstrap-reset-form" class="inline-form">
-            <select name="agentId" id="bootstrap-agent"></select>
-            <span></span>
-            <button>Reset Bootstrap</button>
-          </form>
-          <form id="agent-seed-form" class="inline-form">
-            <select name="agentId" id="seed-agent"></select>
-            <input name="what" placeholder="seed role/personality/style, optional" />
-            <button>Seed</button>
-          </form>
-          <form id="agent-delete-form" class="inline-form">
-            <select name="agentId" id="delete-agent"></select>
-            <label class="check"><input name="deleteWorkspace" type="checkbox" /> workspace</label>
-            <button>Delete Agent</button>
-          </form>
-          <div id="agents" class="list"></div>
-        </article>
+        <div class="page-stack">
+          <article class="wide">
+            <h2>Selected Agent</h2>
+            <div class="agent-selector-row">
+              <select id="selected-agent"></select>
+              <button id="select-main-agent" class="secondary">Main</button>
+            </div>
+            <div id="selected-agent-summary" class="selected-summary"></div>
+          </article>
+
+          <div class="grid agent-sections">
+            <article>
+              <h2>Overview</h2>
+              <div id="agents" class="list"></div>
+            </article>
+
+            <article>
+              <h2>Workspace</h2>
+              <form id="workspace-form" class="stack">
+                <input type="hidden" name="agentId" id="workspace-agent" />
+                <input name="workspace" placeholder="point selected agent at existing OpenClaw workspace" />
+                <button>Attach Workspace</button>
+              </form>
+            </article>
+
+            <article>
+              <h2>Model</h2>
+              <form id="agent-model-form" class="stack">
+                <input type="hidden" name="agentId" id="model-agent" />
+                <select name="model" id="set-agent-model"></select>
+                <button>Set Model</button>
+              </form>
+            </article>
+
+            <article>
+              <h2>Bootstrap</h2>
+              <form id="agent-seed-form" class="stack">
+                <input type="hidden" name="agentId" id="seed-agent" />
+                <input name="what" placeholder="seed role/personality/style, optional" />
+                <button>Seed Selected Agent</button>
+              </form>
+              <form id="bootstrap-reset-form" class="stack">
+                <input type="hidden" name="agentId" id="bootstrap-agent" />
+                <button>Reset Bootstrap</button>
+              </form>
+            </article>
+
+            <article>
+              <h2>Create New Agent</h2>
+              <form id="agent-form" class="stack">
+                <input name="id" placeholder="agent id, e.g. planner" />
+                <input name="name" placeholder="display name" />
+                <input name="role" placeholder="role / identity" />
+                <input name="workspace" placeholder="existing OpenClaw workspace path, optional" />
+                <select name="model" id="agent-model"></select>
+                <button>Create Agent</button>
+              </form>
+            </article>
+
+            <article>
+              <h2>Danger Zone</h2>
+              <form id="agent-delete-form" class="stack">
+                <input type="hidden" name="agentId" id="delete-agent" />
+                <label class="check"><input name="deleteWorkspace" type="checkbox" /> delete workspace files too</label>
+                <button>Delete Selected Agent</button>
+              </form>
+            </article>
+          </div>
         </div>
       </section>
 
