@@ -129,6 +129,10 @@ strong {
   gap: 18px;
 }
 
+.summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 article {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -138,6 +142,21 @@ article {
 
 .wide {
   grid-column: 1 / -1;
+}
+
+.summary-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.summary-body {
+  display: grid;
+  gap: 6px;
+}
+
+.summary-body strong {
+  font-size: 30px;
 }
 
 form {
@@ -254,6 +273,7 @@ pre {
 
 @media (max-width: 900px) {
   .dashboard,
+  .summary-grid,
   .grid,
   .inline-form,
   .task-form {

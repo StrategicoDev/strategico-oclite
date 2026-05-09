@@ -22,6 +22,7 @@ function render() {
   document.querySelector("#session-count").textContent = state.sessions.length;
   document.querySelector("#sender-count").textContent = state.config.telegram.allowlist.length;
 
+  renderDashboard();
   renderModels();
   renderProviders();
   renderAgents();
@@ -29,6 +30,40 @@ function render() {
   renderSessions();
   renderWorkspaceFiles();
   showView(activeView);
+}
+
+function renderDashboard() {
+  const agents = state.agents || [];
+  const sessions = state.sessions || [];
+  const telegram = state.config.telegram || {};
+  const bots = Object.values(telegram.bots || {});
+  const bindings = agents.flatMap((agent) => agent.bindings || []);
+  const providers = state.config.providers || {};
+  const defaultModel = state.config.models.default;
+  const bootstrapped = agents.filter((agent) => agent.bootstrap && agent.bootstrap.status === "complete").length;
+  const stale = sessions.filter((session) => session.status === "stale").length;
+  const active = sessions.filter((session) => session.status === "active").length;
+
+  document.querySelector("#dashboard-agents").innerHTML = `
+    <strong>${agents.length}</strong>
+    <small>${bootstrapped} bootstrapped · ${Math.max(agents.length - bootstrapped, 0)} pending</small>
+    <small>Default orchestrator: ${state.config.runtime.defaultAgent}</small>
+  `;
+  document.querySelector("#dashboard-models").innerHTML = `
+    <strong>${state.config.models.allowed.length}</strong>
+    <small>Default: ${defaultModel}</small>
+    <small>${Object.keys(providers).length} providers configured</small>
+  `;
+  document.querySelector("#dashboard-channels").innerHTML = `
+    <strong>${bots.length}</strong>
+    <small>${telegram.allowlist.length} allowed senders · ${bindings.length} bindings</small>
+    <small>Telegram only</small>
+  `;
+  document.querySelector("#dashboard-sessions").innerHTML = `
+    <strong>${sessions.length}</strong>
+    <small>${active} active · ${stale} stale</small>
+    <small>Retention: ${state.config.runtime.staleAfterHours}h stale threshold</small>
+  `;
 }
 
 function showView(name) {

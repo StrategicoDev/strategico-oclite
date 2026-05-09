@@ -48,25 +48,29 @@
       </section>
 
       <section class="view active" data-view="dashboard">
-        <div class="grid">
-          <article>
-            <h2>Task Test</h2>
-            <form id="task-form" class="task-form">
-              <select name="agentId" id="task-agent"></select>
-              <textarea name="message" placeholder="Send a local test task to an agent"></textarea>
-              <button>Run Task</button>
-            </form>
-            <pre id="task-output"></pre>
+        <div class="grid summary-grid">
+          <article class="summary-card">
+            <h2>Agents</h2>
+            <div id="dashboard-agents" class="summary-body"></div>
+            <button class="secondary jump" data-view-target="agents">Manage Agents</button>
           </article>
 
-          <article>
-            <h2>Diagnostics</h2>
-            <form id="diagnostics-form" class="inline-form">
-              <select name="agentId" id="diagnostics-agent"></select>
-              <span></span>
-              <button>Check Agent Route</button>
-            </form>
-            <pre id="diagnostics-output"></pre>
+          <article class="summary-card">
+            <h2>Models</h2>
+            <div id="dashboard-models" class="summary-body"></div>
+            <button class="secondary jump" data-view-target="models">Manage Models</button>
+          </article>
+
+          <article class="summary-card">
+            <h2>Channels</h2>
+            <div id="dashboard-channels" class="summary-body"></div>
+            <button class="secondary jump" data-view-target="channels">Manage Channels</button>
+          </article>
+
+          <article class="summary-card">
+            <h2>Sessions</h2>
+            <div id="dashboard-sessions" class="summary-body"></div>
+            <button class="secondary jump" data-view-target="sessions">Manage Sessions</button>
           </article>
 
           <article class="wide">
@@ -195,6 +199,26 @@
           <h2>Sessions</h2>
           <button id="prune">Mark Stale</button>
           <div id="sessions" class="list"></div>
+        </article>
+
+        <article class="wide">
+          <h2>Task Test</h2>
+          <form id="task-form" class="task-form">
+            <select name="agentId" id="task-agent"></select>
+            <textarea name="message" placeholder="Send a local test task to an agent"></textarea>
+            <button>Run Task</button>
+          </form>
+          <pre id="task-output"></pre>
+        </article>
+
+        <article class="wide">
+          <h2>Diagnostics</h2>
+          <form id="diagnostics-form" class="inline-form">
+            <select name="agentId" id="diagnostics-agent"></select>
+            <span></span>
+            <button>Check Agent Route</button>
+          </form>
+          <pre id="diagnostics-output"></pre>
         </article>
         </div>
       </section>
