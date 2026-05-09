@@ -235,7 +235,13 @@ class ProviderRunner:
         status = getattr(response, "status", 200)
         if not raw.strip():
             raise ProviderError(f"Provider returned empty response body with HTTP {status} and content-type '{content_type}'")
-        if "text/event-stream" not in content_type and not raw.lstrip().startswith("data:"):
+        stripped = raw.lstrip()
+        is_stream = (
+            "text/event-stream" in content_type
+            or stripped.startswith("data:")
+            or stripped.startswith("event:")
+        )
+        if not is_stream:
             try:
                 return self._extract_text(json.loads(raw))
             except json.JSONDecodeError as exc:
@@ -248,8 +254,12 @@ class ProviderRunner:
     def _extract_stream_text(self, raw: str) -> str:
         deltas: list[str] = []
         completed: dict[str, Any] | None = None
+        event_name = ""
         for line in raw.splitlines():
             line = line.strip()
+            if line.startswith("event:"):
+                event_name = line[6:].strip()
+                continue
             if not line.startswith("data:"):
                 continue
             payload = line[5:].strip()
@@ -259,9 +269,22 @@ class ProviderRunner:
                 event = json.loads(payload)
             except json.JSONDecodeError:
                 continue
-            event_type = event.get("type")
-            if event_type in ("response.output_text.delta", "response.refusal.delta"):
-                deltas.append(event.get("delta", ""))
+            event_type = event.get("type") or event_name
+            if event_type in (
+                "response.output_text.delta",
+                "response.refusal.delta",
+                "response.output_text_annotation.added",
+            ):
+                if event.get("delta"):
+                    deltas.append(event["delta"])
+                elif event.get("text"):
+                    deltas.append(event["text"])
+            elif event_type == "response.output_item.done":
+                deltas.extend(self._extract_texts_from_item(event.get("item")))
+            elif event_type == "response.content_part.done":
+                deltas.extend(self._extract_texts_from_item({"content": [event.get("part", {})]}))
+            elif event_type == "response.output_item.added":
+                deltas.extend(self._extract_texts_from_item(event.get("item")))
             elif event_type == "response.completed" and isinstance(event.get("response"), dict):
                 completed = event["response"]
         if deltas:
@@ -269,3 +292,12 @@ class ProviderRunner:
         if completed:
             return self._extract_text(completed)
         raise ProviderError("Provider returned no streamed text output")
+
+    def _extract_texts_from_item(self, item: Any) -> list[str]:
+        if not isinstance(item, dict):
+            return []
+        texts: list[str] = []
+        for content in item.get("content", []):
+            if content.get("text"):
+                texts.append(content["text"])
+        return texts
