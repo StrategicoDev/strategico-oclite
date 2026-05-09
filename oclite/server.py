@@ -308,8 +308,24 @@ def run_server(host: str, port: int, poll_telegram: bool = True) -> None:
 
 
 def restart_process() -> None:
-    args = [sys.executable, *sys.argv]
-    os.execv(sys.executable, args)
+    entry = Path(sys.argv[0]).resolve()
+    if entry.name == "__main__.py" and entry.parent.name == "oclite":
+        args = [sys.executable, "-m", "oclite", *sys.argv[1:]]
+    else:
+        args = [sys.executable, *sys.argv]
+    helper = (
+        "import os, subprocess, sys, time; "
+        "time.sleep(1); "
+        "subprocess.Popen(sys.argv[1:], cwd=os.getcwd())"
+    )
+    creationflags = getattr(subprocess, "DETACHED_PROCESS", 0)
+    subprocess.Popen(
+        [sys.executable, "-c", helper, *args],
+        cwd=os.getcwd(),
+        close_fds=True,
+        creationflags=creationflags,
+    )
+    os._exit(0)
 
 
 def main() -> None:
