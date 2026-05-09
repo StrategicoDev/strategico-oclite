@@ -146,6 +146,8 @@ The tool contract is injected into agent context and written into new agents' `T
 
 OCLite injects a live agent registry on every turn, including model, status, bootstrap state, bindings, and workspace path.
 
+When the orchestrator delegates to an agent whose bootstrap is incomplete, OCLite seeds that agent from the orchestrator context first, then runs the delegated task.
+
 Only the default orchestrator agent may create, delete, or seed delegate agents.
 
 ## Telegram Linking

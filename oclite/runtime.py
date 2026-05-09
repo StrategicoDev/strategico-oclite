@@ -149,6 +149,8 @@ class AgentRuntime:
                 target = self.store.get_agent(args["agentId"])
                 if not target:
                     return f"Cannot delegate: unknown agent '{args['agentId']}'."
+                if (target.bootstrap or {}).get("status") != "complete":
+                    target = self.store.seed_agent(target.id)
                 session = self.store.create_or_touch_session(
                     target,
                     "delegate",
