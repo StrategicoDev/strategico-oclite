@@ -134,7 +134,7 @@ Allowed tools are managed by OCLite runtime metadata.
 When you need to operate the platform, return exactly one JSON object and no extra prose.
 
 Create an agent:
-{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","model":"openai-codex/gpt-5.5"}}
+{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","user":"same user as orchestrator","what":"A focused research agent with a precise, source-aware style.","model":"openai-codex/gpt-5.5"}}
 
 List agents:
 {"oclite_tool":"list_agents","args":{}}

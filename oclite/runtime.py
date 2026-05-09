@@ -23,7 +23,7 @@ You can operate the OCLite runtime by returning exactly one JSON object and no e
 Available tools:
 
 1. Create an agent:
-{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","model":"openai-codex/gpt-5.5"}}
+{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","user":"Sipes","what":"A focused research agent with a precise, source-aware style.","model":"openai-codex/gpt-5.5"}}
 
 2. List agents:
 {"oclite_tool":"list_agents","args":{}}
@@ -36,6 +36,10 @@ Rules:
 - Do not say you lack the platform interface for these actions.
 - Keep agent ids lowercase with letters, numbers, dashes, or underscores.
 - Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
+- Before creating an agent, ask for or infer:
+  name: optional; create a creative name from the role if none is given.
+  user: optional; use the same user context as the orchestrator if none is given.
+  what: optional; create a basic role, personality, and style from the agent role and your own orchestrator flavor if none is given.
 """
 
 

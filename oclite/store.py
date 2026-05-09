@@ -207,6 +207,8 @@ class Store:
         name = data.get("name") or agent_id.title()
         role = data.get("role") or "OCLite worker agent"
         ensure_openclaw_workspace(workspace, name, role)
+        user_context = data.get("user") or self._main_user_context()
+        what = data.get("what") or self._default_agent_what(name, role)
         agent = Agent(
             id=agent_id,
             name=name,
@@ -221,9 +223,63 @@ class Store:
             },
             tools=data.get("tools") or ["read_file", "write_file", "list_files"],
             bindings=data.get("bindings") or [],
+            bootstrap={
+                "status": "complete",
+                "phase": "complete",
+                "completedAt": utc_now(),
+                "source": "create_agent",
+            },
         )
+        self._seed_agent_context(workspace, agent, user_context, what)
         self.save_agent(agent)
         return agent
+
+    def _main_user_context(self) -> str:
+        main = self.get_agent("main")
+        if not main:
+            return "Use the same user context as the orchestrator."
+        user_path = Path(main.workspace) / "USER.md"
+        if user_path.exists():
+            text = user_path.read_text(encoding="utf-8", errors="replace").strip()
+            if text:
+                return text
+        return "Use the same user context as the orchestrator."
+
+    def _default_agent_what(self, name: str, role: str) -> str:
+        return (
+            f"{name} is a specialist agent focused on {role}. "
+            "Work with the orchestrator's practical, clear, and task-oriented style. "
+            "Be precise, proactive, and concise; ask for missing context only when necessary."
+        )
+
+    def _seed_agent_context(self, workspace: Path, agent: Agent, user_context: str, what: str) -> None:
+        timestamp = utc_now()
+        self._append_workspace_file(
+            workspace / "IDENTITY.md",
+            f"\n\n## OCLite Agent Seed ({timestamp})\n\nname: {agent.name}\nrole: {agent.role}\n\n{what}\n",
+        )
+        self._append_workspace_file(
+            workspace / "SOUL.md",
+            f"\n\n## OCLite Agent Seed ({timestamp})\n\n{what}\n",
+        )
+        self._append_workspace_file(
+            workspace / "USER.md",
+            f"\n\n## Inherited User Context ({timestamp})\n\n{user_context}\n",
+        )
+        self._append_workspace_file(
+            workspace / "MEMORY.md",
+            f"\n\n## Created By OCLite ({timestamp})\n\nAgent: {agent.name}\nRole: {agent.role}\n\n{what}\n",
+        )
+        self._append_workspace_file(
+            workspace / "BOOTSTRAP.md",
+            f"\n\n## Completed By OCLite Create Agent ({timestamp})\n\nAgent context and inherited user context were seeded at creation.\n",
+        )
+
+    def _append_workspace_file(self, path: Path, text: str) -> None:
+        if not path.exists():
+            path.write_text("", encoding="utf-8")
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(text)
 
     def list_sessions(self) -> list[dict[str, Any]]:
         self.setup()

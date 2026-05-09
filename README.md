@@ -110,8 +110,16 @@ Agents can operate OCLite by returning a single JSON tool call. The runtime exec
 Create an agent:
 
 ```json
-{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","model":"openai-codex/gpt-5.5"}}
+{"oclite_tool":"create_agent","args":{"id":"researcher","name":"Researcher","role":"Research and analysis agent","user":"same user as orchestrator","what":"A focused research agent with a precise, source-aware style.","model":"openai-codex/gpt-5.5"}}
 ```
+
+When creating agents, the orchestrator should ask for or infer:
+
+- `name`: optional; generate a creative name from the role if none is given.
+- `user`: optional; inherit the orchestrator's user context if none is given.
+- `what`: optional; generate role, personality, and style from the agent role and orchestrator flavor if none is given.
+
+Agents created through the runtime tool are seeded into `IDENTITY.md`, `SOUL.md`, `USER.md`, `MEMORY.md`, and marked bootstrap-complete so delegation can start immediately.
 
 List agents:
 
