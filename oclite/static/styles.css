@@ -292,15 +292,63 @@ button.secondary:hover {
   margin-bottom: 6px;
 }
 
-.task-item {
-  display: grid;
-  gap: 10px;
-}
-
 .task-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 14px;
+}
+
+.task-workbench {
+  display: grid;
+  grid-template-columns: minmax(420px, 0.9fr) minmax(0, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.task-list {
+  display: grid;
+  gap: 6px;
+}
+
+.task-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 46px;
+  background: #ffffff;
+  color: var(--ink);
+  border-color: var(--line);
+  text-align: left;
+  white-space: normal;
+}
+
+.task-row:hover,
+.task-row.selected {
+  background: #eef8f7;
+  border-color: var(--accent);
+}
+
+.task-row-title,
+.task-row-agent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-row small {
+  grid-column: 1 / -1;
+}
+
+.task-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.task-item {
+  display: grid;
+  gap: 10px;
 }
 
 .task-events {
@@ -344,6 +392,8 @@ pre {
   .agent-sections,
   .selected-summary,
   .grid,
+  .task-workbench,
+  .task-row,
   .inline-form,
   .agent-selector-row,
   .task-form {

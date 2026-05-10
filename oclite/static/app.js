@@ -1,6 +1,7 @@
 let state = null;
 let activeView = "dashboard";
 let selectedAgentId = "main";
+let selectedTaskId = null;
 let refreshInFlight = false;
 let lastRefreshAt = null;
 
@@ -102,13 +103,32 @@ function renderTasks() {
     }
     return groups;
   }, {});
+  if (!parents.some((task) => task.id === selectedTaskId)) {
+    selectedTaskId = parents[0] ? parents[0].id : null;
+  }
+  const selected = parents.find((task) => task.id === selectedTaskId);
   document.querySelector("#tasks").innerHTML =
-    parents
-      .map((task) => renderTaskItem(task, childrenByParent[task.id] || []))
-      .join("") || item("<small>No tasks yet</small>");
+    parents.map((task) => renderTaskRow(task, childrenByParent[task.id] || [])).join("") || item("<small>No tasks yet</small>");
+  document.querySelector("#task-detail").innerHTML = renderTaskDetail(selected, selected ? childrenByParent[selected.id] || [] : []);
 }
 
-function renderTaskItem(task, children) {
+function renderTaskRow(task, children) {
+  const current = currentTaskHolder(task, children);
+  const childSummary = children.length
+    ? `<small>${children.length} child ${children.length === 1 ? "task" : "tasks"} · latest: ${escapeHtml(current.childStatus)}</small>`
+    : "<small>No child tasks</small>";
+  return `
+    <button class="task-row ${task.id === selectedTaskId ? "selected" : ""}" data-task-select="${escapeHtml(task.id)}">
+      <span class="task-row-title">${escapeHtml(task.title)}</span>
+      <span class="task-row-agent">${escapeHtml(current.agent)}</span>
+      <span class="pill">${escapeHtml(current.status)}</span>
+      ${childSummary}
+    </button>
+  `;
+}
+
+function renderTaskDetail(task, children) {
+  if (!task) return item("<small>Select a task to see detail</small>");
   const events = (task.events || []).slice(-4);
   const childHtml = children
     .map(
@@ -145,6 +165,31 @@ function renderTaskItem(task, children) {
       ${childHtml}
     </div>
   `);
+}
+
+function currentTaskHolder(task, children) {
+  const activeChild = [...children].reverse().find((child) => !isTerminalTask(child));
+  const latestChild = children.length ? children[children.length - 1] : null;
+  const child = activeChild || latestChild;
+  if (child && task.status === "in_progress") {
+    return {
+      agent: child.assigneeId || child.agentId,
+      status: child.status,
+      childStatus: `${child.assigneeId || child.agentId} ${child.status}`,
+    };
+  }
+  if (child) {
+    return {
+      agent: task.agentId,
+      status: task.status,
+      childStatus: `${child.assigneeId || child.agentId} ${child.status}`,
+    };
+  }
+  return {
+    agent: task.agentId,
+    status: task.status,
+    childStatus: "none",
+  };
 }
 
 function showView(name) {
@@ -402,6 +447,12 @@ document.querySelector("#prune").addEventListener("click", async () => {
   await refresh();
 });
 document.addEventListener("click", async (event) => {
+  const row = event.target.closest("[data-task-select]");
+  if (row) {
+    selectedTaskId = row.dataset.taskSelect;
+    renderTasks();
+    return;
+  }
   const button = event.target.closest("[data-task-cancel]");
   if (!button) return;
   await api("/api/tasks/status", {
