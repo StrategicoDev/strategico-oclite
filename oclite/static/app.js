@@ -59,6 +59,7 @@ function renderDashboard() {
   const bots = Object.values(telegram.bots || {});
   const bindings = agents.flatMap((agent) => agent.bindings || []);
   const providers = state.config.providers || {};
+  const aliases = state.config.models.aliases || {};
   const defaultModel = state.config.models.default;
   const bootstrapped = agents.filter((agent) => agent.bootstrap && agent.bootstrap.status === "complete").length;
   const stale = sessions.filter((session) => session.status === "stale").length;
@@ -73,9 +74,9 @@ function renderDashboard() {
     <small>Default orchestrator: ${state.config.runtime.defaultAgent}</small>
   `;
   document.querySelector("#dashboard-models").innerHTML = `
-    <strong>${state.config.models.allowed.length}</strong>
+    <strong>${Object.keys(aliases).length}</strong>
     <small>Default: ${defaultModel}</small>
-    <small>${Object.keys(providers).length} providers configured</small>
+    <small>${Object.keys(providers).length} providers · ${(state.config.models.catalog || []).length} models</small>
   `;
   document.querySelector("#dashboard-channels").innerHTML = `
     <strong>${bots.length}</strong>
@@ -213,15 +214,37 @@ function setLiveStatus(text) {
 }
 
 function renderModels() {
-  const allowed = state.config.models.allowed;
+  const modelConfig = state.config.models || {};
+  const catalog = modelConfig.catalog || [];
+  const aliases = modelConfig.aliases || {};
   const defaultModel = state.config.models.default;
-  const providerIds = Object.keys(state.config.providers || {});
-  document.querySelector("#models").innerHTML = allowed
-    .map((model) => item(`<header><strong>${model}</strong>${model === defaultModel ? '<span class="pill">default</span>' : ""}</header>`))
-    .join("");
-  fillSelect("#agent-model", allowed, defaultModel);
-  fillSelect("#set-agent-model", allowed, defaultModel);
+  const providerIds = availableProviderIds();
+  const agentModels = agentModelChoices();
+  document.querySelector("#models").innerHTML =
+    catalog
+      .map((entry) =>
+        item(`
+          <header><strong>${escapeHtml(entry.model)}</strong><span class="pill">${escapeHtml(entry.providerId)}</span></header>
+          <small>${escapeHtml(modelRef(entry.providerId, entry.model))}</small>
+        `)
+      )
+      .join("") || item("<small>No provider models yet</small>");
+  document.querySelector("#model-aliases").innerHTML =
+    Object.values(aliases)
+      .map((alias) =>
+        item(`
+          <header><strong>${escapeHtml(alias.alias)}</strong>${alias.alias === defaultModel ? '<span class="pill">default</span>' : ""}</header>
+          <small>${escapeHtml(alias.providerId)} / ${escapeHtml(alias.model)} · ${escapeHtml(alias.authType || "api-key")}</small>
+          ${alias.apiKeyEnv ? `<br /><small>env: ${escapeHtml(alias.apiKeyEnv)}</small>` : ""}
+          ${alias.profileId ? `<br /><small>OAuth profile: ${escapeHtml(alias.profileId)}</small>` : ""}
+        `)
+      )
+      .join("") || item("<small>No aliases yet</small>");
+  fillSelect("#agent-model", agentModels, defaultModel);
+  fillSelect("#set-agent-model", agentModels, defaultModel);
   fillSelect("#model-provider", providerIds, preferredSelectValue("#model-provider", providerIds, "openai-codex"));
+  fillSelect("#alias-provider", providerIds, preferredSelectValue("#alias-provider", providerIds, "openai-codex"));
+  syncAliasModelSelect();
 }
 
 function renderProviders() {
@@ -230,7 +253,7 @@ function renderProviders() {
     Object.entries(providers)
       .map(([id, provider]) =>
         item(`
-          <header><strong>${id}</strong><span class="pill">${provider.apiKey ? "key saved" : provider.apiKeyEnv || "no key"}</span></header>
+          <header><strong>${id}</strong><span class="pill">${provider.profileId ? "OAuth ready" : provider.apiKeyEnv || "provider"}</span></header>
           <small>${provider.baseUrl || "https://api.openai.com/v1"}</small>
         `)
       )
@@ -322,6 +345,35 @@ function renderSelectedAgentSummary(agent) {
 function recentTurns(agent) {
   const value = agent && agent.context ? Number(agent.context.recentTurns) : 16;
   return Number.isFinite(value) ? value : 16;
+}
+
+function availableProviderIds() {
+  const providers = Object.keys(state.config.providers || {});
+  return providers.includes("mock") ? providers : ["mock", ...providers];
+}
+
+function agentModelChoices() {
+  const allowed = state.config.models.allowed || [];
+  const aliases = Object.keys(state.config.models.aliases || {});
+  return [...new Set([...aliases, ...allowed])];
+}
+
+function modelRef(providerId, model) {
+  return providerId === "mock" ? `${providerId}:${model}` : `${providerId}/${model}`;
+}
+
+function syncAliasModelSelect() {
+  const providerId = document.querySelector("#alias-provider").value;
+  const catalog = state.config.models.catalog || [];
+  const values = catalog.filter((entry) => entry.providerId === providerId).map((entry) => entry.model);
+  fillSelect("#alias-model", values, preferredSelectValue("#alias-model", values, values[0]));
+  syncAliasAuthFields();
+}
+
+function syncAliasAuthFields() {
+  const authType = document.querySelector("#alias-auth-type").value;
+  document.querySelector("#alias-api-key").disabled = authType !== "api-key";
+  document.querySelector("#alias-profile-id").disabled = authType !== "oauth";
 }
 
 function renderTelegram() {
@@ -481,6 +533,8 @@ document.querySelector("#task-limit").addEventListener("change", (event) => {
   localStorage.setItem("ocliteTaskLimit", String(taskLimit));
   renderTasks();
 });
+document.querySelector("#alias-provider").addEventListener("change", syncAliasModelSelect);
+document.querySelector("#alias-auth-type").addEventListener("change", syncAliasAuthFields);
 document.addEventListener("click", async (event) => {
   const row = event.target.closest("[data-task-select]");
   if (row) {
@@ -531,13 +585,10 @@ wireForm("#bot-form", "/api/telegram/bots", (form) => {
 });
 wireForm("#allow-form", "/api/telegram/allow");
 wireForm("#bind-form", "/api/agents/bind");
-wireForm("#model-form", "/api/models/allow", (form) => {
+wireForm("#model-form", "/api/models/register");
+wireForm("#model-alias-form", "/api/models/alias", (form) => {
   const data = formJson(form);
   data.makeDefault = form.elements.makeDefault.checked;
-  if (data.providerId && data.model && !data.model.includes("/") && !data.model.includes(":")) {
-    data.model = `${data.providerId}/${data.model}`;
-  }
-  delete data.providerId;
   return data;
 });
 wireForm("#provider-form", "/api/providers");

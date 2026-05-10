@@ -161,6 +161,28 @@ strong {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.model-setup {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.alias-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.advanced {
+  margin-bottom: 14px;
+  color: var(--muted);
+}
+
+.advanced summary {
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
 .agent-selector-row {
   display: grid;
   grid-template-columns: minmax(280px, 520px) auto;
@@ -461,11 +483,13 @@ pre {
   .dashboard,
   .summary-grid,
   .agent-sections,
+  .model-setup,
   .selected-summary,
   .grid,
   .task-workbench,
   .task-row,
   .inline-form,
+  .alias-form,
   .agent-selector-row,
   .task-form {
     grid-template-columns: 1fr;

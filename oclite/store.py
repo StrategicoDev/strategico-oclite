@@ -36,6 +36,7 @@ class Store:
         self.sessions_dir = self.home / "sessions"
         self.tasks_dir = self.home / "tasks"
         self.logs_dir = self.home / "logs"
+        self.env_path = self.home / ".env"
 
     def setup(self, main_workspace: str | None = None) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
@@ -44,6 +45,7 @@ class Store:
         self.sessions_dir.mkdir(exist_ok=True)
         self.tasks_dir.mkdir(exist_ok=True)
         self.logs_dir.mkdir(exist_ok=True)
+        self.load_env()
         if not self.config_path.exists():
             self._write_config(
                 {
@@ -54,7 +56,19 @@ class Store:
                         "deleteAfterDays": 30,
                         "maxActivePerAgent": 5,
                     },
-                    "models": {"allowed": DEFAULT_ALLOWED_MODELS, "default": "mock:echo"},
+                    "models": {
+                        "allowed": DEFAULT_ALLOWED_MODELS,
+                        "default": "mock:echo",
+                        "catalog": [{"providerId": "mock", "model": "echo"}],
+                        "aliases": {
+                            "mock:echo": {
+                                "alias": "mock:echo",
+                                "providerId": "mock",
+                                "model": "echo",
+                                "authType": "none",
+                            }
+                        },
+                    },
                     "providers": DEFAULT_PROVIDERS,
                     "telegram": {"bots": {}, "allowlist": [], "detectedSenders": []},
                 }
@@ -103,6 +117,39 @@ class Store:
 
     def _ensure_config_defaults(self, config: dict[str, Any]) -> bool:
         changed = False
+        models = config.setdefault("models", {})
+        if "allowed" not in models:
+            models["allowed"] = DEFAULT_ALLOWED_MODELS.copy()
+            changed = True
+        if "default" not in models:
+            models["default"] = models["allowed"][0] if models["allowed"] else "mock:echo"
+            changed = True
+        if "catalog" not in models:
+            models["catalog"] = []
+            changed = True
+        if "aliases" not in models:
+            models["aliases"] = {}
+            changed = True
+        known_catalog = {(entry.get("providerId"), entry.get("model")) for entry in models.get("catalog", [])}
+        for model_ref in models.get("allowed", []):
+            alias_entry = models.get("aliases", {}).get(model_ref)
+            if alias_entry:
+                provider_id = alias_entry.get("providerId", "openai")
+                model_id = alias_entry.get("model", model_ref)
+            else:
+                provider_id, model_id = self._split_model_ref(model_ref)
+            if (provider_id, model_id) not in known_catalog:
+                models["catalog"].append({"providerId": provider_id, "model": model_id})
+                known_catalog.add((provider_id, model_id))
+                changed = True
+            if model_ref == "mock:echo" and model_ref not in models["aliases"]:
+                models["aliases"][model_ref] = {
+                    "alias": model_ref,
+                    "providerId": "mock",
+                    "model": "echo",
+                    "authType": "none",
+                }
+                changed = True
         if "providers" not in config:
             config["providers"] = DEFAULT_PROVIDERS
             changed = True
@@ -117,6 +164,19 @@ class Store:
                             config["providers"][provider][key] = value
                             changed = True
         return changed
+
+    def load_env(self) -> None:
+        if not self.env_path.exists():
+            return
+        for line in self.env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key:
+                os.environ[key] = value
 
     def list_agents(self) -> list[Agent]:
         self.setup()
@@ -152,8 +212,7 @@ class Store:
         agent = self.get_agent(agent_id)
         if not agent:
             raise ValueError(f"Unknown agent '{agent_id}'")
-        config = self.config()
-        if model not in config["models"]["allowed"]:
+        if model not in self.agent_model_choices():
             raise ValueError(f"Model '{model}' is not authorized")
         agent.model = model
         self.save_agent(agent)
@@ -337,10 +396,108 @@ class Store:
         if data.get("profileId"):
             updated["profileId"] = data["profileId"]
         if data.get("apiKey"):
-            updated["apiKey"] = data["apiKey"]
+            self.write_env_value(api_key_env, data["apiKey"])
+            updated.pop("apiKey", None)
         providers[provider_id] = updated
         self.save_config(config)
         return updated
+
+    def save_model(self, data: dict[str, Any]) -> dict[str, Any]:
+        provider_id = data.get("providerId", "").strip()
+        model = data.get("model", "").strip()
+        if not provider_id:
+            raise ValueError("Provider is required")
+        if not model:
+            raise ValueError("Model id is required")
+        config = self.config()
+        if provider_id != "mock" and provider_id not in config.get("providers", {}):
+            raise ValueError(f"Unknown provider '{provider_id}'")
+        catalog = config.setdefault("models", {}).setdefault("catalog", [])
+        existing = next((entry for entry in catalog if entry.get("providerId") == provider_id and entry.get("model") == model), None)
+        if not existing:
+            existing = {"providerId": provider_id, "model": model}
+            catalog.append(existing)
+        self.save_config(config)
+        return existing
+
+    def save_model_alias(self, data: dict[str, Any]) -> dict[str, Any]:
+        provider_id = data.get("providerId", "").strip()
+        model = data.get("model", "").strip()
+        alias = data.get("alias", "").strip() or self._default_alias(provider_id, model)
+        auth_type = data.get("authType", "api-key").strip() or "api-key"
+        if not provider_id:
+            raise ValueError("Provider is required")
+        if not model:
+            raise ValueError("Model is required")
+        self.save_model({"providerId": provider_id, "model": model})
+        config = self.config()
+        entry = {
+            "alias": alias,
+            "providerId": provider_id,
+            "model": model,
+            "authType": auth_type,
+        }
+        if auth_type == "oauth":
+            entry["profileId"] = data.get("profileId") or config.get("providers", {}).get(provider_id, {}).get("profileId") or "default"
+        elif auth_type == "api-key":
+            api_key_env = data.get("apiKeyEnv") or self._env_key_for_alias(alias)
+            entry["apiKeyEnv"] = api_key_env
+            if data.get("apiKey"):
+                self.write_env_value(api_key_env, data["apiKey"])
+        aliases = config.setdefault("models", {}).setdefault("aliases", {})
+        aliases[alias] = entry
+        allowed = config["models"].setdefault("allowed", [])
+        if alias not in allowed:
+            allowed.append(alias)
+        if data.get("makeDefault"):
+            config["models"]["default"] = alias
+        self.save_config(config)
+        return entry
+
+    def agent_model_choices(self) -> list[str]:
+        config = self.config()
+        choices = list(config.get("models", {}).get("allowed", []))
+        for alias in config.get("models", {}).get("aliases", {}):
+            if alias not in choices:
+                choices.append(alias)
+        return choices
+
+    def write_env_value(self, key: str, value: str) -> None:
+        key = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in key.upper()).strip("_")
+        if not key:
+            raise ValueError("Environment variable name is required")
+        self.home.mkdir(parents=True, exist_ok=True)
+        lines = []
+        if self.env_path.exists():
+            lines = self.env_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        updated_lines = []
+        seen = False
+        for line in lines:
+            if line.strip().startswith(f"{key}="):
+                updated_lines.append(f"{key}={value}")
+                seen = True
+            else:
+                updated_lines.append(line)
+        if not seen:
+            updated_lines.append(f"{key}={value}")
+        self.env_path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
+        os.environ[key] = value
+
+    def _split_model_ref(self, model_ref: str) -> tuple[str, str]:
+        if "/" in model_ref:
+            provider_id, model = model_ref.split("/", 1)
+            return provider_id, model
+        if ":" in model_ref:
+            provider_id, model = model_ref.split(":", 1)
+            return provider_id, model
+        return "openai", model_ref
+
+    def _default_alias(self, provider_id: str, model: str) -> str:
+        return f"{provider_id}-{model}".replace("/", "-").replace(":", "-")
+
+    def _env_key_for_alias(self, alias: str) -> str:
+        clean = "".join(ch if ch.isalnum() else "_" for ch in alias.upper()).strip("_")
+        return f"OCLITE_{clean}_API_KEY"
 
     def create_agent(self, data: dict[str, Any]) -> Agent:
         config = self.config()
@@ -351,7 +508,7 @@ class Store:
         if self.get_agent(agent_id):
             raise ValueError(f"Agent '{agent_id}' already exists")
         model = data.get("model") or config["models"]["default"]
-        if model not in config["models"]["allowed"]:
+        if model not in self.agent_model_choices():
             raise ValueError(f"Model '{model}' is not authorized")
         workspace = Path(data.get("workspace") or self.workspaces_dir / agent_id).expanduser().resolve()
         name = data.get("name") or agent_id.title()

@@ -19,6 +19,7 @@ class ProviderError(RuntimeError):
 class ModelRef:
     provider: str
     model: str
+    alias: str = ""
 
 
 def parse_model_ref(model: str) -> ModelRef:
@@ -37,7 +38,7 @@ class ProviderRunner:
         self.home = home
 
     def run(self, model: str, instructions: str, message: str) -> str:
-        ref = parse_model_ref(model)
+        ref = self._resolve_model_ref(model)
         if ref.provider in ("openai", "openai-codex"):
             return self._openai_response(ref, instructions, message)
         if ref.provider == "mock":
@@ -79,8 +80,8 @@ class ProviderRunner:
         return {"ok": True, "providerId": provider_id, "modelCount": len(models), "models": models[:25]}
 
     def diagnostics(self, model: str) -> dict[str, Any]:
-        ref = parse_model_ref(model)
-        provider_config = self._provider_config(ref.provider)
+        ref = self._resolve_model_ref(model)
+        provider_config = self._provider_config(ref)
         profile = self._oauth_profile(ref.provider, provider_config)
         has_api_key = bool(provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY")))
         auth_type = "oauth" if profile else "api-key" if has_api_key else "missing"
@@ -91,6 +92,7 @@ class ProviderRunner:
         return {
             "provider": ref.provider,
             "model": ref.model,
+            "alias": ref.alias,
             "authType": auth_type,
             "profileId": provider_config.get("profileId", "default"),
             "oauthProfileFound": bool(profile),
@@ -99,15 +101,15 @@ class ProviderRunner:
         }
 
     def _openai_response(self, ref: ModelRef, instructions: str, message: str) -> str:
-        provider_config = self._provider_config(ref.provider)
+        provider_config = self._provider_config(ref)
         if ref.provider == "openai-codex" and self._oauth_profile(ref.provider, provider_config):
             return self._codex_oauth_response(ref, provider_config, instructions, message)
-        if ref.provider == "openai-codex" and not provider_config.get("apiKey"):
+        credential = self._credential(ref.provider, provider_config)
+        if ref.provider == "openai-codex" and not credential and provider_config.get("authType") != "api-key":
             raise ProviderError(
                 "openai-codex is configured without an OAuth profile. "
                 "Use Providers -> Start OAuth, then save provider openai-codex with profile id 'default'."
             )
-        credential = self._credential(ref.provider, provider_config)
         if not credential:
             raise ProviderError(
                 f"Missing API key for '{ref.provider}'. Set {provider_config.get('apiKeyEnv', 'OPENAI_API_KEY')} "
@@ -179,9 +181,30 @@ class ProviderRunner:
         except urllib.error.URLError as exc:
             raise ProviderError(f"Codex OAuth API network error: {exc.reason}") from exc
 
-    def _provider_config(self, provider: str) -> dict[str, Any]:
+    def _resolve_model_ref(self, model: str) -> ModelRef:
+        aliases = self.config.get("models", {}).get("aliases", {})
+        alias = aliases.get(model)
+        if alias:
+            return ModelRef(
+                provider=alias.get("providerId", "openai"),
+                model=alias.get("model", model),
+                alias=model,
+            )
+        return parse_model_ref(model)
+
+    def _provider_config(self, ref: ModelRef | str) -> dict[str, Any]:
+        provider = ref.provider if isinstance(ref, ModelRef) else ref
         providers = self.config.get("providers", {})
-        return providers.get(provider) or providers.get("openai") or {}
+        provider_config = dict(providers.get(provider) or providers.get("openai") or {})
+        if isinstance(ref, ModelRef) and ref.alias:
+            alias = self.config.get("models", {}).get("aliases", {}).get(ref.alias, {})
+            if alias.get("authType"):
+                provider_config["authType"] = alias["authType"]
+            if alias.get("apiKeyEnv"):
+                provider_config["apiKeyEnv"] = alias["apiKeyEnv"]
+            if alias.get("profileId"):
+                provider_config["profileId"] = alias["profileId"]
+        return provider_config
 
     def _credential(self, provider: str, provider_config: dict[str, Any]) -> str | None:
         profile = self._oauth_profile(provider, provider_config)
@@ -190,6 +213,8 @@ class ProviderRunner:
         return provider_config.get("apiKey") or os.environ.get(provider_config.get("apiKeyEnv", "OPENAI_API_KEY"))
 
     def _oauth_profile(self, provider: str, provider_config: dict[str, Any]) -> dict[str, Any] | None:
+        if provider_config.get("authType") == "api-key":
+            return None
         if provider == "openai-codex" and self.home:
             profile_id = provider_config.get("profileId", "default")
             profile = AuthStore(self.home).get_profile(provider, profile_id)

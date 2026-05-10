@@ -84,6 +84,12 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 return self.allow_sender()
             if parsed.path == "/api/models/allow":
                 return self.allow_model()
+            if parsed.path == "/api/models/register":
+                data = self.read_json()
+                return self.json_response(self.store.save_model(data), 201)
+            if parsed.path == "/api/models/alias":
+                data = self.read_json()
+                return self.json_response(self.store.save_model_alias(data), 201)
             if parsed.path == "/api/providers":
                 return self.save_provider()
             if parsed.path == "/api/providers/auth":

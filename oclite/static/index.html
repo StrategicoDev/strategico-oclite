@@ -205,50 +205,66 @@
       </section>
 
       <section class="view" data-view="models">
-        <div class="grid">
+        <div class="grid model-setup">
           <article>
-          <h2>Models</h2>
-          <form id="model-form" class="inline-form">
-            <select name="providerId" id="model-provider"></select>
-            <input name="model" placeholder="model, e.g. gpt-5.5" />
-            <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
-            <button>Allow Model</button>
-          </form>
-          <div id="models" class="list"></div>
-        </article>
+            <h2>1. Providers</h2>
+            <form id="provider-form" class="stack">
+              <input name="providerId" placeholder="provider id, e.g. openai" />
+              <input name="baseUrl" placeholder="base URL, optional" />
+              <button>Add Provider</button>
+            </form>
+            <form id="oauth-start-form" class="inline-form">
+              <select name="providerId" id="oauth-provider"></select>
+              <input name="profileId" type="hidden" value="default" />
+              <button>Connect OAuth</button>
+            </form>
+            <form id="provider-auth-form" class="inline-form">
+              <select name="providerId" id="auth-provider"></select>
+              <span></span>
+              <button>Test Auth</button>
+            </form>
+            <pre id="provider-auth-output"></pre>
+            <pre id="oauth-output"></pre>
+            <details class="advanced">
+              <summary>Manual OAuth callback</summary>
+              <form id="oauth-complete-form" class="stack">
+                <input name="code" placeholder="callback code" />
+                <input name="state" placeholder="callback state" />
+                <button>Complete OAuth Manually</button>
+              </form>
+            </details>
+            <div id="auth-profiles" class="list"></div>
+            <div id="providers" class="list"></div>
+          </article>
 
-        <article>
-          <h2>Providers</h2>
-          <form id="provider-form" class="stack">
-            <input name="providerId" placeholder="provider id, e.g. openai-codex" />
-            <input name="apiKey" placeholder="API key, optional" />
-            <input name="apiKeyEnv" placeholder="API key env var, e.g. OPENAI_API_KEY" />
-            <input name="baseUrl" placeholder="base URL, default https://api.openai.com/v1" />
-            <input name="organization" placeholder="OpenAI organization id, optional" />
-            <input name="project" placeholder="OpenAI project id, optional" />
-            <input name="profileId" placeholder="OAuth profile id, e.g. default" />
-            <button>Save Provider</button>
-          </form>
-          <form id="provider-auth-form" class="inline-form">
-            <select name="providerId" id="auth-provider"></select>
-            <span></span>
-            <button>Test Auth</button>
-          </form>
-          <pre id="provider-auth-output"></pre>
-          <form id="oauth-start-form" class="inline-form">
-            <select name="providerId" id="oauth-provider"></select>
-            <input name="profileId" placeholder="profile id, e.g. default" value="default" />
-            <button>Start OAuth</button>
-          </form>
-          <form id="oauth-complete-form" class="stack">
-            <input name="code" placeholder="manual callback code, optional" />
-            <input name="state" placeholder="manual callback state, optional" />
-            <button>Complete OAuth Manually</button>
-          </form>
-          <pre id="oauth-output"></pre>
-          <div id="auth-profiles" class="list"></div>
-          <div id="providers" class="list"></div>
-        </article>
+          <article>
+            <h2>2. Models</h2>
+            <form id="model-form" class="stack">
+              <select name="providerId" id="model-provider"></select>
+              <input name="model" placeholder="model id, e.g. gpt-5.5" />
+              <button>Add Model</button>
+            </form>
+            <div id="models" class="list"></div>
+          </article>
+
+          <article class="wide">
+            <h2>3. Agent Model Aliases</h2>
+            <form id="model-alias-form" class="alias-form">
+              <input name="alias" placeholder="alias agents use, e.g. strategist" />
+              <select name="providerId" id="alias-provider"></select>
+              <select name="model" id="alias-model"></select>
+              <select name="authType" id="alias-auth-type">
+                <option value="api-key">API key</option>
+                <option value="oauth">OAuth</option>
+                <option value="none">No auth</option>
+              </select>
+              <input name="apiKey" id="alias-api-key" placeholder="API key, saved to .oclite/.env" />
+              <input name="profileId" id="alias-profile-id" placeholder="OAuth profile, default" value="default" />
+              <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
+              <button>Create Alias</button>
+            </form>
+            <div id="model-aliases" class="list"></div>
+          </article>
         </div>
       </section>
 
