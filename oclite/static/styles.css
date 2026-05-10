@@ -228,6 +228,10 @@ textarea {
   min-height: 80px;
 }
 
+#agent-seed-form textarea {
+  min-height: 180px;
+}
+
 button {
   background: var(--accent);
   color: white;

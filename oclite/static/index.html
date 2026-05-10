@@ -129,7 +129,11 @@
               <h2>Bootstrap</h2>
               <form id="agent-seed-form" class="stack">
                 <input type="hidden" name="agentId" id="seed-agent" />
-                <input name="what" placeholder="seed role/personality/style, optional" />
+                <textarea
+                  name="what"
+                  rows="8"
+                  placeholder="Describe the selected agent's role, responsibilities, personality, style, and operating rules. Leave blank to generate a practical default from the agent role."
+                ></textarea>
                 <button>Seed Selected Agent</button>
               </form>
               <form id="bootstrap-reset-form" class="stack">
