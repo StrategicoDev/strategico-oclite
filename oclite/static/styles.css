@@ -204,6 +204,19 @@ article {
   margin-bottom: 0;
 }
 
+.task-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+}
+
+.task-controls input {
+  width: 84px;
+  min-height: 34px;
+}
+
 form {
   margin-bottom: 14px;
 }
@@ -302,12 +315,18 @@ button.secondary:hover {
   display: grid;
   grid-template-columns: minmax(420px, 0.9fr) minmax(0, 1.4fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  height: clamp(420px, calc(100vh - 360px), 760px);
+  min-height: 0;
 }
 
 .task-list {
   display: grid;
+  align-content: start;
   gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .task-row {
@@ -343,12 +362,33 @@ button.secondary:hover {
 
 .task-detail {
   display: grid;
+  align-content: start;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .task-item {
   display: grid;
   gap: 10px;
+}
+
+.task-result {
+  max-height: 360px;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.task-result.compact {
+  max-height: 220px;
 }
 
 .task-events {
@@ -403,5 +443,20 @@ pre {
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .section-heading,
+  .task-controls {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .task-workbench {
+    height: auto;
+  }
+
+  .task-list,
+  .task-detail {
+    max-height: 52vh;
   }
 }

@@ -4,6 +4,7 @@ let selectedAgentId = "main";
 let selectedTaskId = null;
 let refreshInFlight = false;
 let lastRefreshAt = null;
+let taskLimit = normalizeTaskLimit(localStorage.getItem("ocliteTaskLimit") || 25);
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -95,7 +96,9 @@ function renderDashboard() {
 
 function renderTasks() {
   const tasks = state.tasks || [];
-  const parents = tasks.filter((task) => !task.parentId);
+  const allParents = tasks.filter((task) => !task.parentId);
+  const effectiveLimit = taskLimit > 0 ? taskLimit : allParents.length;
+  const parents = allParents.slice(0, effectiveLimit);
   const childrenByParent = tasks.reduce((groups, task) => {
     if (task.parentId) {
       groups[task.parentId] = groups[task.parentId] || [];
@@ -107,6 +110,8 @@ function renderTasks() {
     selectedTaskId = parents[0] ? parents[0].id : null;
   }
   const selected = parents.find((task) => task.id === selectedTaskId);
+  document.querySelector("#task-limit").value = String(taskLimit);
+  document.querySelector("#task-limit-status").textContent = `Showing ${parents.length} of ${allParents.length}`;
   document.querySelector("#tasks").innerHTML =
     parents.map((task) => renderTaskRow(task, childrenByParent[task.id] || [])).join("") || item("<small>No tasks yet</small>");
   document.querySelector("#task-detail").innerHTML = renderTaskDetail(selected, selected ? childrenByParent[selected.id] || [] : []);
@@ -139,7 +144,7 @@ function renderTaskDetail(task, children) {
             <small>child: ${escapeHtml(child.id)}</small>
             <small>agent: ${escapeHtml(child.assigneeId || child.agentId)}</small>
           </div>
-          ${child.result ? `<small>${escapeHtml(truncate(child.result, 260))}</small>` : ""}
+          ${child.result ? `<div class="task-result compact">${escapeHtml(child.result)}</div>` : ""}
         </div>
       `
     )
@@ -154,7 +159,7 @@ function renderTaskDetail(task, children) {
         <small>updated ${escapeHtml(task.updatedAt || "")}</small>
       </div>
       ${isTerminalTask(task) ? "" : `<button class="secondary task-cancel" data-task-cancel="${escapeHtml(task.id)}">Cancel Task</button>`}
-      ${task.result ? `<small>${escapeHtml(truncate(task.result, 360))}</small>` : ""}
+      ${task.result ? `<div class="task-result">${escapeHtml(task.result)}</div>` : ""}
       ${
         events.length
           ? `<div class="task-events">${events
@@ -374,6 +379,12 @@ function isTerminalTask(task) {
   return ["completed", "blocked", "cancelled"].includes(task.status);
 }
 
+function normalizeTaskLimit(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 25;
+  return Math.max(1, Math.min(Math.trunc(number), 500));
+}
+
 function fillSelect(selector, values, selected) {
   const select = document.querySelector(selector);
   select.innerHTML = values.map((value) => `<option ${value === selected ? "selected" : ""}>${value}</option>`).join("");
@@ -445,6 +456,11 @@ document.querySelector("#select-main-agent").addEventListener("click", () => {
 document.querySelector("#prune").addEventListener("click", async () => {
   await api("/api/sessions/prune", { method: "POST", body: "{}" });
   await refresh();
+});
+document.querySelector("#task-limit").addEventListener("change", (event) => {
+  taskLimit = normalizeTaskLimit(event.currentTarget.value || 25);
+  localStorage.setItem("ocliteTaskLimit", String(taskLimit));
+  renderTasks();
 });
 document.addEventListener("click", async (event) => {
   const row = event.target.closest("[data-task-select]");

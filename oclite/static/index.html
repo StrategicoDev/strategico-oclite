@@ -253,7 +253,12 @@
           <article class="wide">
             <div class="section-heading">
               <h2>Task Dashboard</h2>
-              <small id="live-status">Live refresh starting</small>
+              <div class="task-controls">
+                <label class="field-label" for="task-limit">Show tasks</label>
+                <input id="task-limit" type="number" min="1" max="500" step="1" />
+                <small id="task-limit-status">Showing tasks</small>
+                <small id="live-status">Live refresh starting</small>
+              </div>
             </div>
             <div class="task-workbench">
               <div id="tasks" class="task-list"></div>
