@@ -290,11 +290,13 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         target = (STATIC_DIR / path).resolve()
         if not str(target).startswith(str(STATIC_DIR.resolve())) or not target.exists():
             target = STATIC_DIR / "index.html"
-        content_type = "text/html"
-        if target.suffix == ".css":
-            content_type = "text/css"
-        if target.suffix == ".js":
-            content_type = "application/javascript"
+        content_types = {
+            ".css": "text/css",
+            ".html": "text/html",
+            ".js": "application/javascript",
+            ".svg": "image/svg+xml",
+        }
+        content_type = content_types.get(target.suffix, "application/octet-stream")
         body = target.read_bytes()
         self.send_response(200)
         self.send_header("content-type", content_type)
