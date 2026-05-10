@@ -128,6 +128,8 @@ Task statuses are `in_progress`, `completed`, `blocked`, and `cancelled`. The co
 
 Telegram responses are split into safe message-sized chunks so long task results still appear in chat and remain available for follow-up context.
 
+Brief chat, greetings, thanks, confirmations, and simple context follow-ups are not logged as tasks. OCLite only creates task records for actionable work such as research, builds, planning, writing, fixes, delegation, or other concrete deliverables.
+
 For app/software build requests, the intended workflow is architect -> sprint plan -> coder -> sprint review -> repeat -> final delivery. The orchestrator can keep creating one-level child tasks under the parent until all sprints are completed or the task is blocked for user input.
 
 Create an agent:

@@ -52,6 +52,7 @@ Rules:
 - Delegate tasks are one level deep only. Child tasks must not create child tasks.
 - After a delegate returns, OCLite will force an orchestration decision. You must either deliver a user-facing answer, request user input/approval, or request another one-level delegate task.
 - When the user refers to prior chat or task output with phrases like "that list", "the TSV", "it", or "here in the chat", use Recent Session Context and Recent Task Results before asking what they mean.
+- Treat greetings, thanks, confirmations, and tiny conversational follow-ups as chat. Reserve task/delegation workflows for actionable work that needs tracking, delegation, or a concrete deliverable.
 - For app/software build requests, operate like a team: use or create a solution architect agent to clarify scope and produce functional/technical specs, split large work into sprints, delegate implementation to a coder agent, assess each sprint result, repeat until all sprints are done, then deliver the final artifact/status to the user.
 - Keep agent ids lowercase with letters, numbers, dashes, or underscores.
 - Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
@@ -103,7 +104,8 @@ class AgentRuntime:
         recent_limit = int((agent.context or {}).get("recentTurns", 16))
         recent_events = self.store.recent_session_events(session_id, recent_limit)
         recent_tasks = self.store.recent_session_tasks(session_id, 5)
-        if task_id is None and parent_task_id is None:
+        track_task = bool(task_id or parent_task_id or self._should_track_task(agent, message))
+        if task_id is None and parent_task_id is None and track_task:
             task = self.store.create_task(
                 title=message,
                 agent_id=agent.id,
@@ -465,6 +467,102 @@ class AgentRuntime:
         except json.JSONDecodeError:
             return None
         return data if isinstance(data, dict) else None
+
+    def _should_track_task(self, agent: Agent, message: str) -> bool:
+        text = " ".join(str(message or "").strip().lower().split())
+        if not text:
+            return False
+        simple_chat = {
+            "thanks",
+            "thank you",
+            "thx",
+            "ta",
+            "ok",
+            "okay",
+            "cool",
+            "great",
+            "nice",
+            "awesome",
+            "perfect",
+            "yes",
+            "no",
+            "yep",
+            "nope",
+            "hi",
+            "hello",
+            "hey",
+            "good morning",
+            "good afternoon",
+            "good evening",
+            "how are you",
+        }
+        if text in simple_chat:
+            return False
+        if len(text.split()) <= 5 and any(text.startswith(prefix) for prefix in ("thanks", "thank you", "ok ", "okay ")):
+            return False
+        context_followup_terms = (
+            "that list",
+            "the list",
+            "the tsv",
+            "tsv list",
+            "previous",
+            "above",
+            "again",
+            "here in the chat",
+            "paste it",
+            "send it",
+            "show it",
+        )
+        context_followup_verbs = ("give me", "show me", "paste", "send", "repeat", "repost")
+        if any(term in text for term in context_followup_terms) and any(verb in text for verb in context_followup_verbs):
+            return False
+        delegate_phrases = ("delegate", "ask ", "assign ", "hand ")
+        agent_names = {candidate for known in self.store.list_agents() for candidate in (known.id.lower(), known.name.lower())}
+        if any(phrase in text for phrase in delegate_phrases) and any(name and name in text for name in agent_names):
+            return True
+        task_verbs = (
+            "add",
+            "analyze",
+            "audit",
+            "book",
+            "build",
+            "check",
+            "compare",
+            "contact",
+            "convert",
+            "create",
+            "debug",
+            "delete",
+            "design",
+            "draft",
+            "email",
+            "find",
+            "fix",
+            "generate",
+            "get",
+            "give",
+            "implement",
+            "investigate",
+            "make",
+            "monitor",
+            "plan",
+            "prepare",
+            "produce",
+            "research",
+            "review",
+            "schedule",
+            "set up",
+            "summarize",
+            "update",
+            "write",
+        )
+        starters = tuple(f"{verb} " for verb in task_verbs)
+        polite_starters = tuple(f"please {verb} " for verb in task_verbs) + tuple(f"can you {verb} " for verb in task_verbs)
+        if text.startswith(starters) or text.startswith(polite_starters):
+            return True
+        if any(f" {verb} " in f" {text} " for verb in task_verbs) and len(text.split()) >= 8:
+            return True
+        return len(text) > 180
 
     def _status_from_response(self, response: str) -> str:
         lowered = response.lower()
