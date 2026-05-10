@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">OCLite logo</title>
+  <desc id="desc">A simple connected agent network mark inside a rounded square.</desc>
+  <defs>
+    <linearGradient id="frame" x1="12" x2="52" y1="8" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14b8a6" />
+      <stop offset="1" stop-color="#0f766e" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#f7f8fb" />
+  <path
+    d="M32 7.5 53.2 19.8v24.4L32 56.5 10.8 44.2V19.8L32 7.5Z"
+    fill="#ffffff"
+    stroke="url(#frame)"
+    stroke-width="3"
+    stroke-linejoin="round"
+  />
+  <path
+    d="M22 38.5 32 24.5l10 14M22 38.5h20"
+    fill="none"
+    stroke="#18202f"
+    stroke-width="3"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <circle cx="32" cy="24.5" r="5.5" fill="#0f766e" />
+  <circle cx="22" cy="38.5" r="5.5" fill="#14b8a6" />
+  <circle cx="42" cy="38.5" r="5.5" fill="#18202f" />
+  <circle cx="32" cy="24.5" r="2" fill="#ffffff" />
+  <circle cx="22" cy="38.5" r="2" fill="#ffffff" />
+  <circle cx="42" cy="38.5" r="2" fill="#ffffff" />
+</svg>
