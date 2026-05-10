@@ -215,12 +215,13 @@ function setLiveStatus(text) {
 function renderModels() {
   const allowed = state.config.models.allowed;
   const defaultModel = state.config.models.default;
+  const providerIds = Object.keys(state.config.providers || {});
   document.querySelector("#models").innerHTML = allowed
     .map((model) => item(`<header><strong>${model}</strong>${model === defaultModel ? '<span class="pill">default</span>' : ""}</header>`))
     .join("");
   fillSelect("#agent-model", allowed, defaultModel);
   fillSelect("#set-agent-model", allowed, defaultModel);
-  fillSelect("#model-provider", Object.keys(state.config.providers || {}), "openai-codex");
+  fillSelect("#model-provider", providerIds, preferredSelectValue("#model-provider", providerIds, "openai-codex"));
 }
 
 function renderProviders() {
@@ -234,8 +235,9 @@ function renderProviders() {
         `)
       )
       .join("") || item("<small>No providers yet</small>");
-  fillSelect("#auth-provider", Object.keys(providers), "openai-codex");
-  fillSelect("#oauth-provider", Object.keys(providers), "openai-codex");
+  const providerIds = Object.keys(providers);
+  fillSelect("#auth-provider", providerIds, preferredSelectValue("#auth-provider", providerIds, "openai-codex"));
+  fillSelect("#oauth-provider", providerIds, preferredSelectValue("#oauth-provider", providerIds, "openai-codex"));
   renderAuthProfiles();
 }
 
@@ -385,9 +387,26 @@ function normalizeTaskLimit(value) {
   return Math.max(1, Math.min(Math.trunc(number), 500));
 }
 
+function preferredSelectValue(selector, values, fallback) {
+  const current = document.querySelector(selector).value;
+  if (current && values.includes(current)) return current;
+  if (fallback && values.includes(fallback)) return fallback;
+  return values[0] || "";
+}
+
 function fillSelect(selector, values, selected) {
   const select = document.querySelector(selector);
-  select.innerHTML = values.map((value) => `<option ${value === selected ? "selected" : ""}>${value}</option>`).join("");
+  const stringValues = values.map((value) => String(value));
+  const previous = select.value;
+  const currentValues = Array.from(select.options).map((option) => option.value);
+  const optionsChanged = currentValues.length !== stringValues.length || currentValues.some((value, index) => value !== stringValues[index]);
+  if (optionsChanged) {
+    select.innerHTML = stringValues.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+  }
+  const target = selected === undefined && stringValues.includes(previous) ? previous : String(selected || stringValues[0] || "");
+  if (target && stringValues.includes(target) && select.value !== target) {
+    select.value = target;
+  }
 }
 
 function formJson(form) {
