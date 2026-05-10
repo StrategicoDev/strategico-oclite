@@ -110,6 +110,8 @@ OCLite stores session transcripts as JSONL and injects recent user/assistant/sys
 
 Each agent has its own context window setting. The default is 16 recent messages, and it can be changed from Agents -> Conversation Context.
 
+Recent chat and recent task results are also included directly with the current user message so follow-up requests can refer to prior answers, lists, and completed tasks naturally.
+
 This keeps follow-up requests coherent without adding a database or long-term vector memory.
 
 ## Runtime Tool Protocol
@@ -123,6 +125,8 @@ OCLite logs every external agent request as a parent task. When the orchestrator
 Only one task level is allowed below a parent task. Delegate agents cannot create child tasks. After a delegate responds, the orchestrator must decide whether the parent task is complete, blocked pending user input/approval, or needs another one-level child task.
 
 Task statuses are `in_progress`, `completed`, `blocked`, and `cancelled`. The control UI includes a Tasks dashboard for monitoring parent and child task sessions.
+
+Telegram responses are split into safe message-sized chunks so long task results still appear in chat and remain available for follow-up context.
 
 Create an agent:
 

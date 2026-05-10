@@ -44,6 +44,7 @@ Rules:
 - Only the orchestrator/default agent may delegate tasks. Delegate agents return results to the orchestrator.
 - Delegate tasks are one level deep only. Child tasks must not create child tasks.
 - After a delegate returns, assess whether the parent task is complete, blocked pending user input/approval, or needs another one-level child task.
+- When the user refers to prior chat or task output with phrases like "that list", "the TSV", "it", or "here in the chat", use Recent Session Context and Recent Task Results before asking what they mean.
 - Keep agent ids lowercase with letters, numbers, dashes, or underscores.
 - Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
 - Before creating an agent, ask for or infer:
@@ -57,7 +58,12 @@ class AgentRuntime:
     def __init__(self, store: Store):
         self.store = store
 
-    def workspace_context(self, agent: Agent, recent_events: list[dict[str, Any]] | None = None) -> str:
+    def workspace_context(
+        self,
+        agent: Agent,
+        recent_events: list[dict[str, Any]] | None = None,
+        recent_tasks: list[dict[str, Any]] | None = None,
+    ) -> str:
         workspace = Path(agent.workspace)
         parts: list[str] = []
         for filename in OPENCLAW_WORKSPACE_FILES:
@@ -69,6 +75,10 @@ class AgentRuntime:
             transcript = self._format_recent_events(recent_events)
             if transcript:
                 parts.append(f"## Recent Session Context\n{transcript}")
+        if recent_tasks:
+            task_context = self._format_recent_tasks(recent_tasks)
+            if task_context:
+                parts.append(f"## Recent Task Results\n{task_context}")
         return "\n\n".join([*parts, TOOL_INSTRUCTIONS, self.store.agent_registry_summary()])
 
     def run_task(
@@ -82,6 +92,9 @@ class AgentRuntime:
         channel: str = "",
         source: str = "",
     ) -> str:
+        recent_limit = int((agent.context or {}).get("recentTurns", 16))
+        recent_events = self.store.recent_session_events(session_id, recent_limit)
+        recent_tasks = self.store.recent_session_tasks(session_id, 5)
         if task_id is None and parent_task_id is None:
             task = self.store.create_task(
                 title=message,
@@ -94,8 +107,6 @@ class AgentRuntime:
             )
             task_id = task.id
             self._progress(on_progress, f"Task started: {task.title}")
-        recent_limit = int((agent.context or {}).get("recentTurns", 16))
-        recent_events = self.store.recent_session_events(session_id, recent_limit)
         self.store.append_session_event(session_id, {"role": "user", "content": message})
         bootstrap_response = Bootstrapper(self.store).handle(agent, message)
         if bootstrap_response is not None:
@@ -109,8 +120,8 @@ class AgentRuntime:
             try:
                 response = ProviderRunner(self.store.config(), self.store.home).run(
                     agent.model,
-                    self.workspace_context(agent, recent_events),
-                    message,
+                    self.workspace_context(agent, recent_events, recent_tasks),
+                    self._message_with_context(message, recent_events, recent_tasks),
                 )
             except ProviderError as exc:
                 response = f"Provider error: {exc}"
@@ -144,6 +155,53 @@ class AgentRuntime:
                 content = content[:1800].rstrip() + "..."
             lines.append(f"{role}: {content}")
         return "\n\n".join(lines)
+
+    def _format_recent_tasks(self, tasks: list[dict[str, Any]]) -> str:
+        blocks: list[str] = []
+        for task in tasks:
+            title = str(task.get("title", "")).strip()
+            message = str(task.get("message", "")).strip()
+            result = str(task.get("result", "")).strip()
+            status = str(task.get("status", "")).strip()
+            if result and len(result) > 2600:
+                result = result[:2600].rstrip() + "..."
+            if message and len(message) > 600:
+                message = message[:600].rstrip() + "..."
+            blocks.append(
+                "\n".join(
+                    part
+                    for part in [
+                        f"Task: {title}",
+                        f"Status: {status}",
+                        f"User asked: {message}" if message else "",
+                        f"Result: {result}" if result else "",
+                    ]
+                    if part
+                )
+            )
+        return "\n\n".join(blocks)
+
+    def _message_with_context(
+        self,
+        message: str,
+        recent_events: list[dict[str, Any]],
+        recent_tasks: list[dict[str, Any]],
+    ) -> str:
+        context_parts: list[str] = []
+        transcript = self._format_recent_events(recent_events[-8:])
+        tasks = self._format_recent_tasks(recent_tasks[-3:])
+        if transcript:
+            context_parts.append(f"Recent chat before this message:\n{transcript}")
+        if tasks:
+            context_parts.append(f"Recent task results before this message:\n{tasks}")
+        if not context_parts:
+            return message
+        return (
+            "Use the recent chat and task results below to resolve references like 'that list', "
+            "'the previous task', 'it', or 'here in the chat'.\n\n"
+            + "\n\n".join(context_parts)
+            + f"\n\nCurrent user message:\n{message}"
+        )
 
     def _maybe_execute_tool(
         self,
@@ -274,7 +332,7 @@ class AgentRuntime:
         try:
             return ProviderRunner(self.store.config(), self.store.home).run(
                 source_agent.model,
-                self.workspace_context(source_agent, []),
+                self.workspace_context(source_agent, [], [parent.to_dict()] if parent else []),
                 message,
             )
         except ProviderError as exc:
@@ -380,12 +438,32 @@ class TelegramPoller:
     def _send(self, token: str, chat_id: str, text: str) -> None:
         if not chat_id:
             return
-        body = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
-        request = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body)
-        try:
-            urllib.request.urlopen(request, timeout=10).read()
-        except Exception as exc:
-            self._log({"type": "telegram_send_error", "error": str(exc)})
+        for chunk in self._telegram_chunks(text):
+            body = urllib.parse.urlencode({"chat_id": chat_id, "text": chunk}).encode()
+            request = urllib.request.Request(f"https://api.telegram.org/bot{token}/sendMessage", data=body)
+            try:
+                urllib.request.urlopen(request, timeout=10).read()
+            except Exception as exc:
+                self._log({"type": "telegram_send_error", "error": str(exc), "preview": chunk[:200]})
+
+    def _telegram_chunks(self, text: str) -> list[str]:
+        text = str(text or "")
+        if len(text) <= 3800:
+            return [text]
+        chunks: list[str] = []
+        remaining = text
+        while remaining:
+            if len(remaining) <= 3800:
+                chunks.append(remaining)
+                break
+            split_at = remaining.rfind("\n", 0, 3800)
+            if split_at < 1200:
+                split_at = remaining.rfind(" ", 0, 3800)
+            if split_at < 1200:
+                split_at = 3800
+            chunks.append(remaining[:split_at].strip())
+            remaining = remaining[split_at:].strip()
+        return chunks
 
     def _request_json(self, url: str) -> dict[str, Any]:
         with urllib.request.urlopen(url, timeout=10) as response:

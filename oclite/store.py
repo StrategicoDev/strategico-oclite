@@ -235,6 +235,18 @@ class Store:
         tasks.sort(key=lambda task: task.created_at, reverse=True)
         return [task.to_dict() for task in tasks]
 
+    def recent_session_tasks(self, session_id: str, limit: int = 5) -> list[dict[str, Any]]:
+        limit = max(0, int(limit))
+        if limit == 0:
+            return []
+        tasks = [
+            TaskRecord.from_dict(task)
+            for task in self.list_tasks()
+            if task.get("sessionId") == session_id and not task.get("parentId")
+        ]
+        tasks.sort(key=lambda task: task.updated_at)
+        return [task.to_dict() for task in tasks[-limit:]]
+
     def get_task(self, task_id: str) -> TaskRecord | None:
         path = self.tasks_dir / f"{task_id}.json"
         if not path.exists():
