@@ -25,6 +25,7 @@
         <button class="tab" data-view-target="agents">Agents</button>
         <button class="tab" data-view-target="models">Models</button>
         <button class="tab" data-view-target="channels">Channels</button>
+        <button class="tab" data-view-target="tasks">Tasks</button>
         <button class="tab" data-view-target="sessions">Sessions</button>
       </nav>
 
@@ -40,6 +41,10 @@
         <div>
           <span class="label">Sessions</span>
           <strong id="session-count">0</strong>
+        </div>
+        <div>
+          <span class="label">Tasks</span>
+          <strong id="task-count">0</strong>
         </div>
         <div>
           <span class="label">Allowed Senders</span>
@@ -65,6 +70,12 @@
             <h2>Channels</h2>
             <div id="dashboard-channels" class="summary-body"></div>
             <button class="secondary jump" data-view-target="channels">Manage Channels</button>
+          </article>
+
+          <article class="summary-card">
+            <h2>Tasks</h2>
+            <div id="dashboard-tasks" class="summary-body"></div>
+            <button class="secondary jump" data-view-target="tasks">Monitor Tasks</button>
           </article>
 
           <article class="summary-card">
@@ -234,6 +245,15 @@
           <div id="auth-profiles" class="list"></div>
           <div id="providers" class="list"></div>
         </article>
+        </div>
+      </section>
+
+      <section class="view" data-view="tasks">
+        <div class="grid">
+          <article class="wide">
+            <h2>Task Dashboard</h2>
+            <div id="tasks" class="list"></div>
+          </article>
         </div>
       </section>
 

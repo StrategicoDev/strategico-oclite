@@ -120,6 +120,64 @@ class SessionMeta:
         )
 
 
+@dataclass
+class TaskRecord:
+    id: str
+    title: str
+    status: str
+    agent_id: str
+    session_id: str
+    parent_id: str | None = None
+    assignee_id: str | None = None
+    channel: str = ""
+    source: str = ""
+    message: str = ""
+    result: str = ""
+    events: list[dict[str, str]] = field(default_factory=list)
+    created_at: str = field(default_factory=utc_now)
+    updated_at: str = field(default_factory=utc_now)
+    completed_at: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "title": self.title,
+            "status": self.status,
+            "agentId": self.agent_id,
+            "sessionId": self.session_id,
+            "parentId": self.parent_id,
+            "assigneeId": self.assignee_id,
+            "channel": self.channel,
+            "source": self.source,
+            "message": self.message,
+            "result": self.result,
+            "events": self.events,
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+            "completedAt": self.completed_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TaskRecord":
+        return cls(
+            id=data["id"],
+            title=data.get("title", data["id"]),
+            status=data.get("status", "in_progress"),
+            agent_id=data.get("agentId", data.get("agent_id", "")),
+            session_id=data.get("sessionId", data.get("session_id", "")),
+            parent_id=data.get("parentId", data.get("parent_id")),
+            assignee_id=data.get("assigneeId", data.get("assignee_id")),
+            channel=data.get("channel", ""),
+            source=data.get("source", ""),
+            message=data.get("message", ""),
+            result=data.get("result", ""),
+            events=data.get("events", []),
+            created_at=data.get("createdAt", data.get("created_at", utc_now())),
+            updated_at=data.get("updatedAt", data.get("updated_at", utc_now())),
+            completed_at=data.get("completedAt", data.get("completed_at")),
+        )
+
+
 def ensure_openclaw_workspace(path: Path, agent_name: str, role: str) -> None:
     path.mkdir(parents=True, exist_ok=True)
     (path / "memory").mkdir(exist_ok=True)
@@ -145,7 +203,8 @@ List agents:
 Delegate a task:
 {"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
 
-Only the orchestrator/default agent may create, delete, or seed delegate agents.
+Only the orchestrator/default agent may create, delete, seed, or delegate to agents.
+Delegate tasks are one level deep only. Child tasks return results to the orchestrator and must not create child tasks.
 """,
         "HEARTBEAT.md": "# Heartbeat\n\nNo heartbeat behavior configured yet.\n",
         "BOOT.md": "# Boot\n\nLoad workspace files, then follow the active task.\n",

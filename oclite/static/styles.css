@@ -105,7 +105,7 @@ main {
 
 .dashboard {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 18px;
 }
 
@@ -136,7 +136,7 @@ strong {
 }
 
 .summary-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .page-stack {
@@ -278,6 +278,24 @@ button.secondary:hover {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 6px;
+}
+
+.task-item {
+  display: grid;
+  gap: 10px;
+}
+
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.task-events {
+  display: grid;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line);
 }
 
 .pill,

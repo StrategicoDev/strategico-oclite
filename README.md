@@ -116,6 +116,14 @@ This keeps follow-up requests coherent without adding a database or long-term ve
 
 Agents can operate OCLite by returning a single JSON tool call. The runtime executes the call and sends the result back to the user.
 
+## Task Orchestration
+
+OCLite logs every external agent request as a parent task. When the orchestrator delegates, OCLite creates a child task assigned to the delegate agent, waits synchronously for the delegate response, and writes the child result back into the parent flow.
+
+Only one task level is allowed below a parent task. Delegate agents cannot create child tasks. After a delegate responds, the orchestrator must decide whether the parent task is complete, blocked pending user input/approval, or needs another one-level child task.
+
+Task statuses are `in_progress`, `completed`, `blocked`, and `cancelled`. The control UI includes a Tasks dashboard for monitoring parent and child task sessions.
+
 Create an agent:
 
 ```json

@@ -32,6 +32,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             return self.json_response([agent.to_dict() for agent in self.store.list_agents()])
         if parsed.path == "/api/sessions":
             return self.json_response(self.store.list_sessions())
+        if parsed.path == "/api/tasks":
+            return self.json_response(self.store.list_tasks())
         if parsed.path == "/api/auth/profiles":
             return self.json_response(AuthStore(self.store.home).list_profiles())
         if parsed.path == "/api/diagnostics/agent":
@@ -97,6 +99,10 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/sessions/prune":
                 count = self.store.prune_stale()
                 return self.json_response({"pruned": count})
+            if parsed.path == "/api/tasks/status":
+                data = self.read_json()
+                task = self.store.update_task(data["taskId"], data["status"], data.get("message"))
+                return self.json_response(task.to_dict())
             if parsed.path == "/api/tasks":
                 return self.run_task()
         except ValueError as exc:
@@ -111,11 +117,13 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         config = self.store.config()
         agents = [agent.to_dict() for agent in self.store.list_agents()]
         sessions = self.store.list_sessions()
+        tasks = self.store.list_tasks()
         return {
             "home": str(self.store.home),
             "config": config,
             "agents": agents,
             "sessions": sessions,
+            "tasks": tasks,
             "workspaceFiles": [
                 "AGENTS.md",
                 "SOUL.md",
@@ -228,7 +236,7 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         if not agent:
             raise ValueError("Unknown agent")
         session = self.store.create_or_touch_session(agent, "ui", "control", "local")
-        response = self.runtime.run_task(agent, data.get("message", ""), session.id)
+        response = self.runtime.run_task(agent, data.get("message", ""), session.id, channel="ui", source="control")
         self.json_response({"response": response, "session": session.to_dict()})
 
     def system_update(self) -> None:

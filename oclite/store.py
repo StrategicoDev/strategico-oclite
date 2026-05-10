@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .models import Agent, SessionMeta, ensure_openclaw_workspace, new_id, utc_now
+from .models import Agent, SessionMeta, TaskRecord, ensure_openclaw_workspace, new_id, utc_now
 
 
 DEFAULT_ALLOWED_MODELS = ["mock:echo"]
@@ -34,6 +34,7 @@ class Store:
         self.agents_dir = self.home / "agents"
         self.workspaces_dir = self.home / "workspaces"
         self.sessions_dir = self.home / "sessions"
+        self.tasks_dir = self.home / "tasks"
         self.logs_dir = self.home / "logs"
 
     def setup(self, main_workspace: str | None = None) -> None:
@@ -41,6 +42,7 @@ class Store:
         self.agents_dir.mkdir(exist_ok=True)
         self.workspaces_dir.mkdir(exist_ok=True)
         self.sessions_dir.mkdir(exist_ok=True)
+        self.tasks_dir.mkdir(exist_ok=True)
         self.logs_dir.mkdir(exist_ok=True)
         if not self.config_path.exists():
             self._write_config(
@@ -93,6 +95,7 @@ class Store:
         self.agents_dir.mkdir(exist_ok=True)
         self.workspaces_dir.mkdir(exist_ok=True)
         self.sessions_dir.mkdir(exist_ok=True)
+        self.tasks_dir.mkdir(exist_ok=True)
         self.logs_dir.mkdir(exist_ok=True)
 
     def _write_config(self, config: dict[str, Any]) -> None:
@@ -223,6 +226,81 @@ class Store:
                 f"status={agent.status} | bootstrap={bootstrap} | bindings={bindings} | workspace={agent.workspace}"
             )
         return "\n".join(lines)
+
+    def list_tasks(self) -> list[dict[str, Any]]:
+        self.setup()
+        tasks: list[TaskRecord] = []
+        for path in sorted(self.tasks_dir.glob("*.json")):
+            tasks.append(TaskRecord.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+        tasks.sort(key=lambda task: task.created_at, reverse=True)
+        return [task.to_dict() for task in tasks]
+
+    def get_task(self, task_id: str) -> TaskRecord | None:
+        path = self.tasks_dir / f"{task_id}.json"
+        if not path.exists():
+            return None
+        return TaskRecord.from_dict(json.loads(path.read_text(encoding="utf-8")))
+
+    def save_task(self, task: TaskRecord) -> None:
+        self.setup_dirs_only()
+        task.updated_at = utc_now()
+        (self.tasks_dir / f"{task.id}.json").write_text(
+            json.dumps(task.to_dict(), indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+    def create_task(
+        self,
+        title: str,
+        agent_id: str,
+        session_id: str,
+        message: str,
+        channel: str,
+        source: str,
+        parent_id: str | None = None,
+        assignee_id: str | None = None,
+    ) -> TaskRecord:
+        if parent_id:
+            parent = self.get_task(parent_id)
+            if parent and parent.parent_id:
+                raise ValueError("Child tasks cannot have child tasks")
+        task = TaskRecord(
+            id=new_id("task"),
+            title=self._task_title(title or message),
+            status="in_progress",
+            agent_id=agent_id,
+            session_id=session_id,
+            parent_id=parent_id,
+            assignee_id=assignee_id or agent_id,
+            channel=channel,
+            source=source,
+            message=message,
+            events=[{"ts": utc_now(), "status": "in_progress", "message": "Task started"}],
+        )
+        self.save_task(task)
+        return task
+
+    def update_task(self, task_id: str, status: str, message: str | None = None, result: str | None = None) -> TaskRecord:
+        task = self.get_task(task_id)
+        if not task:
+            raise ValueError(f"Unknown task '{task_id}'")
+        if status not in {"in_progress", "completed", "blocked", "cancelled"}:
+            raise ValueError(f"Unsupported task status '{status}'")
+        task.status = status
+        if result is not None:
+            task.result = result
+        if status in {"completed", "blocked", "cancelled"}:
+            task.completed_at = utc_now()
+        if message:
+            task.events.append({"ts": utc_now(), "status": status, "message": message})
+        self.save_task(task)
+        return task
+
+    def _task_title(self, text: str) -> str:
+        cleaned = " ".join(str(text).split())
+        if not cleaned:
+            return "Untitled task"
+        return cleaned[:96] + ("..." if len(cleaned) > 96 else "")
 
     def save_provider(self, provider_id: str, data: dict[str, Any]) -> dict[str, Any]:
         provider_id = provider_id.strip()

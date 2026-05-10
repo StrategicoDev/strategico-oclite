@@ -21,6 +21,7 @@ function render() {
   document.querySelector("#home").textContent = state.home;
   document.querySelector("#agent-count").textContent = state.agents.length;
   document.querySelector("#session-count").textContent = state.sessions.length;
+  document.querySelector("#task-count").textContent = (state.tasks || []).length;
   document.querySelector("#sender-count").textContent = state.config.telegram.allowlist.length;
 
   renderDashboard();
@@ -28,6 +29,7 @@ function render() {
   renderProviders();
   renderAgents();
   renderTelegram();
+  renderTasks();
   renderSessions();
   renderWorkspaceFiles();
   showView(activeView);
@@ -36,6 +38,7 @@ function render() {
 function renderDashboard() {
   const agents = state.agents || [];
   const sessions = state.sessions || [];
+  const tasks = state.tasks || [];
   const telegram = state.config.telegram || {};
   const bots = Object.values(telegram.bots || {});
   const bindings = agents.flatMap((agent) => agent.bindings || []);
@@ -44,6 +47,9 @@ function renderDashboard() {
   const bootstrapped = agents.filter((agent) => agent.bootstrap && agent.bootstrap.status === "complete").length;
   const stale = sessions.filter((session) => session.status === "stale").length;
   const active = sessions.filter((session) => session.status === "active").length;
+  const inProgressTasks = tasks.filter((task) => task.status === "in_progress").length;
+  const blockedTasks = tasks.filter((task) => task.status === "blocked").length;
+  const completedTasks = tasks.filter((task) => task.status === "completed").length;
 
   document.querySelector("#dashboard-agents").innerHTML = `
     <strong>${agents.length}</strong>
@@ -60,11 +66,71 @@ function renderDashboard() {
     <small>${telegram.allowlist.length} allowed senders · ${bindings.length} bindings</small>
     <small>Telegram only</small>
   `;
+  document.querySelector("#dashboard-tasks").innerHTML = `
+    <strong>${tasks.length}</strong>
+    <small>${inProgressTasks} in progress · ${blockedTasks} blocked</small>
+    <small>${completedTasks} completed</small>
+  `;
   document.querySelector("#dashboard-sessions").innerHTML = `
     <strong>${sessions.length}</strong>
     <small>${active} active · ${stale} stale</small>
     <small>Retention: ${state.config.runtime.staleAfterHours}h stale threshold</small>
   `;
+}
+
+function renderTasks() {
+  const tasks = state.tasks || [];
+  const parents = tasks.filter((task) => !task.parentId);
+  const childrenByParent = tasks.reduce((groups, task) => {
+    if (task.parentId) {
+      groups[task.parentId] = groups[task.parentId] || [];
+      groups[task.parentId].push(task);
+    }
+    return groups;
+  }, {});
+  document.querySelector("#tasks").innerHTML =
+    parents
+      .map((task) => renderTaskItem(task, childrenByParent[task.id] || []))
+      .join("") || item("<small>No tasks yet</small>");
+}
+
+function renderTaskItem(task, children) {
+  const events = (task.events || []).slice(-4);
+  const childHtml = children
+    .map(
+      (child) => `
+        <div class="item task-item">
+          <header><strong>${escapeHtml(child.title)}</strong><span class="pill">${escapeHtml(child.status)}</span></header>
+          <div class="task-meta">
+            <small>child: ${escapeHtml(child.id)}</small>
+            <small>agent: ${escapeHtml(child.assigneeId || child.agentId)}</small>
+          </div>
+          ${child.result ? `<small>${escapeHtml(truncate(child.result, 260))}</small>` : ""}
+        </div>
+      `
+    )
+    .join("");
+  return item(`
+    <div class="task-item">
+      <header><strong>${escapeHtml(task.title)}</strong><span class="pill">${escapeHtml(task.status)}</span></header>
+      <div class="task-meta">
+        <small>${escapeHtml(task.id)}</small>
+        <small>agent: ${escapeHtml(task.agentId)}</small>
+        <small>${escapeHtml(task.channel || "runtime")} · ${escapeHtml(task.source || "local")}</small>
+        <small>updated ${escapeHtml(task.updatedAt || "")}</small>
+      </div>
+      ${isTerminalTask(task) ? "" : `<button class="secondary task-cancel" data-task-cancel="${escapeHtml(task.id)}">Cancel Task</button>`}
+      ${task.result ? `<small>${escapeHtml(truncate(task.result, 360))}</small>` : ""}
+      ${
+        events.length
+          ? `<div class="task-events">${events
+              .map((event) => `<small>${escapeHtml(event.ts || "")} · ${escapeHtml(event.status || "")}: ${escapeHtml(event.message || "")}</small>`)
+              .join("")}</div>`
+          : ""
+      }
+      ${childHtml}
+    </div>
+  `);
 }
 
 function showView(name) {
@@ -226,6 +292,24 @@ function item(html) {
   return `<div class="item">${html}</div>`;
 }
 
+function truncate(text, maxLength) {
+  const value = String(text || "");
+  return value.length > maxLength ? `${value.slice(0, maxLength).trim()}...` : value;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function isTerminalTask(task) {
+  return ["completed", "blocked", "cancelled"].includes(task.status);
+}
+
 function fillSelect(selector, values, selected) {
   const select = document.querySelector(selector);
   select.innerHTML = values.map((value) => `<option ${value === selected ? "selected" : ""}>${value}</option>`).join("");
@@ -296,6 +380,19 @@ document.querySelector("#select-main-agent").addEventListener("click", () => {
 });
 document.querySelector("#prune").addEventListener("click", async () => {
   await api("/api/sessions/prune", { method: "POST", body: "{}" });
+  await refresh();
+});
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-task-cancel]");
+  if (!button) return;
+  await api("/api/tasks/status", {
+    method: "POST",
+    body: JSON.stringify({
+      taskId: button.dataset.taskCancel,
+      status: "cancelled",
+      message: "Cancelled from the task dashboard.",
+    }),
+  });
   await refresh();
 });
 

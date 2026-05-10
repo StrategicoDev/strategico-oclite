@@ -8,7 +8,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .bootstrap import Bootstrapper
 from .models import Agent, OPENCLAW_WORKSPACE_FILES
@@ -41,6 +41,9 @@ Rules:
 - If the user asks you to create, spawn, set up, list, or delegate to an agent, use the OCLite tool JSON.
 - Do not say you lack the platform interface for these actions.
 - Only the orchestrator/default agent may create, delete, or seed delegate agents.
+- Only the orchestrator/default agent may delegate tasks. Delegate agents return results to the orchestrator.
+- Delegate tasks are one level deep only. Child tasks must not create child tasks.
+- After a delegate returns, assess whether the parent task is complete, blocked pending user input/approval, or needs another one-level child task.
 - Keep agent ids lowercase with letters, numbers, dashes, or underscores.
 - Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
 - Before creating an agent, ask for or infer:
@@ -68,12 +71,36 @@ class AgentRuntime:
                 parts.append(f"## Recent Session Context\n{transcript}")
         return "\n\n".join([*parts, TOOL_INSTRUCTIONS, self.store.agent_registry_summary()])
 
-    def run_task(self, agent: Agent, message: str, session_id: str) -> str:
+    def run_task(
+        self,
+        agent: Agent,
+        message: str,
+        session_id: str,
+        task_id: str | None = None,
+        parent_task_id: str | None = None,
+        on_progress: Callable[[str], None] | None = None,
+        channel: str = "",
+        source: str = "",
+    ) -> str:
+        if task_id is None and parent_task_id is None:
+            task = self.store.create_task(
+                title=message,
+                agent_id=agent.id,
+                session_id=session_id,
+                message=message,
+                channel=channel,
+                source=source,
+                assignee_id=agent.id,
+            )
+            task_id = task.id
+            self._progress(on_progress, f"Task started: {task.title}")
         recent_limit = int((agent.context or {}).get("recentTurns", 16))
         recent_events = self.store.recent_session_events(session_id, recent_limit)
         self.store.append_session_event(session_id, {"role": "user", "content": message})
         bootstrap_response = Bootstrapper(self.store).handle(agent, message)
         if bootstrap_response is not None:
+            if task_id:
+                self.store.update_task(task_id, "blocked", "Bootstrap is waiting for user context.", bootstrap_response)
             self.store.append_session_event(session_id, {"role": "assistant", "content": bootstrap_response})
             return bootstrap_response
         if agent.model == "mock:echo":
@@ -87,7 +114,14 @@ class AgentRuntime:
                 )
             except ProviderError as exc:
                 response = f"Provider error: {exc}"
-        response = self._maybe_execute_tool(agent, response)
+        response = self._maybe_execute_tool(agent, response, task_id, on_progress)
+        if task_id:
+            status = self._status_from_response(response)
+            self.store.update_task(task_id, status, f"Task {status}.", response)
+            if status == "completed":
+                self._progress(on_progress, f"Task completed: {self.store.get_task(task_id).title}")
+            elif status == "blocked":
+                self._progress(on_progress, f"Task blocked: {self.store.get_task(task_id).title}")
         self.store.append_session_event(session_id, {"role": "assistant", "content": response})
         return response
 
@@ -111,7 +145,14 @@ class AgentRuntime:
             lines.append(f"{role}: {content}")
         return "\n\n".join(lines)
 
-    def _maybe_execute_tool(self, source_agent: Agent, response: str) -> str:
+    def _maybe_execute_tool(
+        self,
+        source_agent: Agent,
+        response: str,
+        active_task_id: str | None = None,
+        on_progress: Callable[[str], None] | None = None,
+        depth: int = 0,
+    ) -> str:
         call = self._parse_tool_call(response)
         if not call:
             return response
@@ -146,6 +187,10 @@ class AgentRuntime:
                 agent = self.store.seed_agent(args["agentId"], args.get("user"), args.get("what"))
                 return f"Seeded agent '{agent.id}' and marked bootstrap complete."
             if tool == "delegate_task":
+                if not self._is_orchestrator(source_agent):
+                    return "Only the orchestrator agent can delegate tasks to other agents."
+                if not active_task_id:
+                    return "Cannot delegate without an active parent task."
                 target = self.store.get_agent(args["agentId"])
                 if not target:
                     return f"Cannot delegate: unknown agent '{args['agentId']}'."
@@ -157,7 +202,33 @@ class AgentRuntime:
                     source_agent.id,
                     "runtime",
                 )
-                result = self.run_task(target, args.get("task", ""), session.id)
+                child_task = self.store.create_task(
+                    title=args.get("task", ""),
+                    agent_id=target.id,
+                    session_id=session.id,
+                    message=args.get("task", ""),
+                    channel="delegate",
+                    source=source_agent.id,
+                    parent_id=active_task_id,
+                    assignee_id=target.id,
+                )
+                self.store.update_task(active_task_id, "in_progress", f"Delegated child task to {target.id}.")
+                self._progress(on_progress, f"Delegated to {target.name}. Waiting for response.")
+                result = self.run_task(
+                    target,
+                    args.get("task", ""),
+                    session.id,
+                    task_id=child_task.id,
+                    parent_task_id=active_task_id,
+                    on_progress=on_progress,
+                    channel="delegate",
+                    source=source_agent.id,
+                )
+                self.store.update_task(active_task_id, "in_progress", f"Received response from {target.id}.")
+                self._progress(on_progress, f"Response received from {target.name}.")
+                if source_agent.model != "mock:echo" and depth < 3:
+                    assessment = self._assess_delegate_result(source_agent, active_task_id, target, result)
+                    return self._maybe_execute_tool(source_agent, assessment, active_task_id, on_progress, depth + 1)
                 return f"Delegated to {target.id}.\n\n{result}"
             return f"Unknown OCLite tool '{tool}'."
         except Exception as exc:
@@ -186,6 +257,40 @@ class AgentRuntime:
 
     def _is_orchestrator(self, agent: Agent) -> bool:
         return agent.id == self.store.config()["runtime"].get("defaultAgent", "main")
+
+    def _assess_delegate_result(self, source_agent: Agent, task_id: str, target: Agent, result: str) -> str:
+        parent = self.store.get_task(task_id)
+        parent_message = parent.message if parent else "Unknown parent task"
+        message = (
+            "A delegate agent has returned a child task result.\n\n"
+            f"Parent task:\n{parent_message}\n\n"
+            f"Delegate agent: {target.id} ({target.name})\n\n"
+            f"Delegate result:\n{result}\n\n"
+            "Assess whether the parent task is now complete, blocked pending user input/approval, "
+            "or needs one more delegate task. If one more delegation is required, return exactly one "
+            "OCLite delegate_task JSON object. Otherwise reply to the user with the completed answer "
+            "or the specific input/approval needed."
+        )
+        try:
+            return ProviderRunner(self.store.config(), self.store.home).run(
+                source_agent.model,
+                self.workspace_context(source_agent, []),
+                message,
+            )
+        except ProviderError as exc:
+            return f"Provider error while assessing delegate result: {exc}\n\nDelegate result:\n{result}"
+
+    def _status_from_response(self, response: str) -> str:
+        lowered = response.lower()
+        if "provider error:" in lowered or "runtime error:" in lowered or "tool error:" in lowered:
+            return "blocked"
+        if "need approval" in lowered or "need input" in lowered or "pending user" in lowered:
+            return "blocked"
+        return "completed"
+
+    def _progress(self, callback: Callable[[str], None] | None, message: str) -> None:
+        if callback:
+            callback(message)
 
 class TelegramPoller:
     def __init__(self, store: Store):
@@ -252,7 +357,14 @@ class TelegramPoller:
             return
         session = self.store.create_or_touch_session(agent, "telegram", account_id, sender_id)
         try:
-            response = self.runtime.run_task(agent, text, session.id)
+            response = self.runtime.run_task(
+                agent,
+                text,
+                session.id,
+                on_progress=lambda update: self._send(token, chat_id, update),
+                channel="telegram",
+                source=sender_id,
+            )
         except Exception as exc:
             response = f"Runtime error: {type(exc).__name__}: {exc}"
             self.store.append_session_event(session.id, {"role": "system", "content": response})
