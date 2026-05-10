@@ -122,11 +122,13 @@ Agents can operate OCLite by returning a single JSON tool call. The runtime exec
 
 OCLite logs every external agent request as a parent task. When the orchestrator delegates, OCLite creates a child task assigned to the delegate agent, waits synchronously for the delegate response, and writes the child result back into the parent flow.
 
-Only one task level is allowed below a parent task. Delegate agents cannot create child tasks. After a delegate responds, the orchestrator must decide whether the parent task is complete, blocked pending user input/approval, or needs another one-level child task.
+Only one task level is allowed below a parent task. Delegate agents cannot create child tasks. After a delegate responds, OCLite forces the orchestrator to return a structured decision: deliver the final user-facing result, block for specific user input/approval, or start another one-level child task. If the orchestrator fails to make a valid decision, OCLite falls back to returning the delegate result so completed work is not lost.
 
 Task statuses are `in_progress`, `completed`, `blocked`, and `cancelled`. The control UI includes a Tasks dashboard for monitoring parent and child task sessions.
 
 Telegram responses are split into safe message-sized chunks so long task results still appear in chat and remain available for follow-up context.
+
+For app/software build requests, the intended workflow is architect -> sprint plan -> coder -> sprint review -> repeat -> final delivery. The orchestrator can keep creating one-level child tasks under the parent until all sprints are completed or the task is blocked for user input.
 
 Create an agent:
 

@@ -16,6 +16,8 @@ from .providers import ProviderError, ProviderRunner
 from .store import Store
 
 
+MAX_DELEGATE_CYCLES = 8
+
 TOOL_INSTRUCTIONS = """## OCLite Runtime Tools
 
 You can operate the OCLite runtime by returning exactly one JSON object and no extra prose when a tool is needed.
@@ -37,14 +39,20 @@ Available tools:
 5. Delegate a task:
 {"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
 
+After a delegate returns, OCLite asks the orchestrator for this exact decision JSON:
+{"oclite_orchestration":"completed","message_to_user":"Final user-facing answer."}
+{"oclite_orchestration":"blocked","message_to_user":"Specific user input or approval needed."}
+{"oclite_orchestration":"delegate_again","message_to_user":"Why another child task is needed.","next_delegate":{"agentId":"coder","task":"Implement sprint 1."}}
+
 Rules:
 - If the user asks you to create, spawn, set up, list, or delegate to an agent, use the OCLite tool JSON.
 - Do not say you lack the platform interface for these actions.
 - Only the orchestrator/default agent may create, delete, or seed delegate agents.
 - Only the orchestrator/default agent may delegate tasks. Delegate agents return results to the orchestrator.
 - Delegate tasks are one level deep only. Child tasks must not create child tasks.
-- After a delegate returns, assess whether the parent task is complete, blocked pending user input/approval, or needs another one-level child task.
+- After a delegate returns, OCLite will force an orchestration decision. You must either deliver a user-facing answer, request user input/approval, or request another one-level delegate task.
 - When the user refers to prior chat or task output with phrases like "that list", "the TSV", "it", or "here in the chat", use Recent Session Context and Recent Task Results before asking what they mean.
+- For app/software build requests, operate like a team: use or create a solution architect agent to clarify scope and produce functional/technical specs, split large work into sprints, delegate implementation to a coder agent, assess each sprint result, repeat until all sprints are done, then deliver the final artifact/status to the user.
 - Keep agent ids lowercase with letters, numbers, dashes, or underscores.
 - Use an already authorized model when one is known; otherwise omit model and OCLite will use the default.
 - Before creating an agent, ask for or infer:
@@ -245,49 +253,7 @@ class AgentRuntime:
                 agent = self.store.seed_agent(args["agentId"], args.get("user"), args.get("what"))
                 return f"Seeded agent '{agent.id}' and marked bootstrap complete."
             if tool == "delegate_task":
-                if not self._is_orchestrator(source_agent):
-                    return "Only the orchestrator agent can delegate tasks to other agents."
-                if not active_task_id:
-                    return "Cannot delegate without an active parent task."
-                target = self.store.get_agent(args["agentId"])
-                if not target:
-                    return f"Cannot delegate: unknown agent '{args['agentId']}'."
-                if (target.bootstrap or {}).get("status") != "complete":
-                    target = self.store.seed_agent(target.id)
-                session = self.store.create_or_touch_session(
-                    target,
-                    "delegate",
-                    source_agent.id,
-                    "runtime",
-                )
-                child_task = self.store.create_task(
-                    title=args.get("task", ""),
-                    agent_id=target.id,
-                    session_id=session.id,
-                    message=args.get("task", ""),
-                    channel="delegate",
-                    source=source_agent.id,
-                    parent_id=active_task_id,
-                    assignee_id=target.id,
-                )
-                self.store.update_task(active_task_id, "in_progress", f"Delegated child task to {target.id}.")
-                self._progress(on_progress, f"Delegated to {target.name}. Waiting for response.")
-                result = self.run_task(
-                    target,
-                    args.get("task", ""),
-                    session.id,
-                    task_id=child_task.id,
-                    parent_task_id=active_task_id,
-                    on_progress=on_progress,
-                    channel="delegate",
-                    source=source_agent.id,
-                )
-                self.store.update_task(active_task_id, "in_progress", f"Received response from {target.id}.")
-                self._progress(on_progress, f"Response received from {target.name}.")
-                if source_agent.model != "mock:echo" and depth < 3:
-                    assessment = self._assess_delegate_result(source_agent, active_task_id, target, result)
-                    return self._maybe_execute_tool(source_agent, assessment, active_task_id, on_progress, depth + 1)
-                return f"Delegated to {target.id}.\n\n{result}"
+                return self._execute_delegate_task(source_agent, args, active_task_id, on_progress, depth)
             return f"Unknown OCLite tool '{tool}'."
         except Exception as exc:
             return f"OCLite tool error: {type(exc).__name__}: {exc}"
@@ -316,7 +282,84 @@ class AgentRuntime:
     def _is_orchestrator(self, agent: Agent) -> bool:
         return agent.id == self.store.config()["runtime"].get("defaultAgent", "main")
 
-    def _assess_delegate_result(self, source_agent: Agent, task_id: str, target: Agent, result: str) -> str:
+    def _execute_delegate_task(
+        self,
+        source_agent: Agent,
+        args: dict[str, Any],
+        active_task_id: str | None,
+        on_progress: Callable[[str], None] | None,
+        depth: int,
+    ) -> str:
+        if not self._is_orchestrator(source_agent):
+            return "Only the orchestrator agent can delegate tasks to other agents."
+        if not active_task_id:
+            return "Cannot delegate without an active parent task."
+        if depth >= MAX_DELEGATE_CYCLES:
+            return (
+                "Pending user input: delegation cycle limit reached before the parent task could be completed. "
+                "Please review the task dashboard and give the orchestrator a narrower next step."
+            )
+        target = self.store.get_agent(args["agentId"])
+        if not target:
+            return f"Cannot delegate: unknown agent '{args['agentId']}'."
+        if (target.bootstrap or {}).get("status") != "complete":
+            target = self.store.seed_agent(target.id)
+        child_message = str(args.get("task", "")).strip()
+        session = self.store.create_or_touch_session(
+            target,
+            "delegate",
+            source_agent.id,
+            "runtime",
+        )
+        child_task = self.store.create_task(
+            title=child_message,
+            agent_id=target.id,
+            session_id=session.id,
+            message=child_message,
+            channel="delegate",
+            source=source_agent.id,
+            parent_id=active_task_id,
+            assignee_id=target.id,
+        )
+        self.store.update_task(active_task_id, "in_progress", f"Delegated child task to {target.id}.")
+        self._progress(on_progress, f"Delegated to {target.name}. Waiting for response.")
+        result = self.run_task(
+            target,
+            child_message,
+            session.id,
+            task_id=child_task.id,
+            parent_task_id=active_task_id,
+            on_progress=on_progress,
+            channel="delegate",
+            source=source_agent.id,
+        )
+        self.store.update_task(active_task_id, "in_progress", f"Received response from {target.id}.")
+        self._progress(on_progress, f"Response received from {target.name}.")
+        if self._status_from_response(result) == "blocked":
+            return f"Pending user input: {target.name} could not complete the delegated task.\n\n{result}"
+        decision = self._delegate_decision(source_agent, active_task_id, target, result)
+        return self._apply_orchestration_decision(
+            source_agent,
+            active_task_id,
+            target,
+            result,
+            decision,
+            on_progress,
+            depth,
+        )
+
+    def _delegate_decision(
+        self,
+        source_agent: Agent,
+        task_id: str,
+        target: Agent,
+        result: str,
+    ) -> dict[str, Any]:
+        if source_agent.model == "mock:echo":
+            return {
+                "oclite_orchestration": "completed",
+                "message_to_user": f"Delegated to {target.id}.\n\n{result}",
+            }
         parent = self.store.get_task(task_id)
         parent_message = parent.message if parent else "Unknown parent task"
         message = (
@@ -324,19 +367,104 @@ class AgentRuntime:
             f"Parent task:\n{parent_message}\n\n"
             f"Delegate agent: {target.id} ({target.name})\n\n"
             f"Delegate result:\n{result}\n\n"
-            "Assess whether the parent task is now complete, blocked pending user input/approval, "
-            "or needs one more delegate task. If one more delegation is required, return exactly one "
-            "OCLite delegate_task JSON object. Otherwise reply to the user with the completed answer "
-            "or the specific input/approval needed."
+            "Return exactly one JSON object and no prose. Use one of these shapes:\n"
+            '{"oclite_orchestration":"completed","message_to_user":"Final user-facing answer including the artifact or result requested by the user."}\n'
+            '{"oclite_orchestration":"blocked","message_to_user":"Specific user input or approval needed."}\n'
+            '{"oclite_orchestration":"delegate_again","message_to_user":"Why another one-level child task is needed.","next_delegate":{"agentId":"agent-id","task":"Concrete child task."}}\n\n'
+            "If the delegate produced the requested artifact, choose completed and include the artifact in message_to_user. "
+            "Do not merely say the delegate completed the task."
         )
         try:
-            return ProviderRunner(self.store.config(), self.store.home).run(
+            response = ProviderRunner(self.store.config(), self.store.home).run(
                 source_agent.model,
                 self.workspace_context(source_agent, [], [parent.to_dict()] if parent else []),
                 message,
             )
         except ProviderError as exc:
-            return f"Provider error while assessing delegate result: {exc}\n\nDelegate result:\n{result}"
+            return {
+                "oclite_orchestration": "completed",
+                "message_to_user": f"Here is {target.name}'s result:\n\n{result}",
+                "fallbackReason": f"Provider error while assessing delegate result: {exc}",
+            }
+        return self._parse_orchestration_decision(response, target, result)
+
+    def _apply_orchestration_decision(
+        self,
+        source_agent: Agent,
+        active_task_id: str,
+        target: Agent,
+        result: str,
+        decision: dict[str, Any],
+        on_progress: Callable[[str], None] | None,
+        depth: int,
+    ) -> str:
+        status = str(decision.get("oclite_orchestration", "completed")).strip().lower()
+        message = str(decision.get("message_to_user") or "").strip()
+        if status == "delegate_again":
+            next_delegate = decision.get("next_delegate") or {}
+            agent_id = str(next_delegate.get("agentId", "")).strip()
+            task = str(next_delegate.get("task", "")).strip()
+            if not agent_id or not task:
+                return message or f"Here is {target.name}'s result:\n\n{result}"
+            self.store.update_task(active_task_id, "in_progress", message or f"Starting another delegate task with {agent_id}.")
+            self._progress(on_progress, message or f"Starting another delegate task with {agent_id}.")
+            return self._execute_delegate_task(
+                source_agent,
+                {"agentId": agent_id, "task": task},
+                active_task_id,
+                on_progress,
+                depth + 1,
+            )
+        if status == "blocked":
+            blocked_message = message or f"{target.name} needs user input before this can continue."
+            self.store.update_task(active_task_id, "blocked", "Orchestrator blocked parent task pending user input.", blocked_message)
+            return f"Pending user input: {blocked_message}"
+        if message:
+            return message
+        return f"Here is {target.name}'s result:\n\n{result}"
+
+    def _parse_orchestration_decision(self, response: str, target: Agent, result: str) -> dict[str, Any]:
+        data = self._parse_json_object(response)
+        if isinstance(data, dict):
+            if data.get("oclite_orchestration"):
+                return data
+            if data.get("oclite_tool") == "delegate_task":
+                args = data.get("args") or {}
+                return {
+                    "oclite_orchestration": "delegate_again",
+                    "message_to_user": f"Continuing with another delegated task for {args.get('agentId', 'the team')}.",
+                    "next_delegate": {
+                        "agentId": args.get("agentId", ""),
+                        "task": args.get("task", ""),
+                    },
+                }
+        cleaned = str(response or "").strip()
+        if cleaned and not cleaned.startswith("{"):
+            return {"oclite_orchestration": "completed", "message_to_user": cleaned}
+        return {
+            "oclite_orchestration": "completed",
+            "message_to_user": f"Here is {target.name}'s result:\n\n{result}",
+            "fallbackReason": "Invalid orchestration decision",
+        }
+
+    def _parse_json_object(self, text: str) -> dict[str, Any] | None:
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+        start = text.find("{")
+        end = text.rfind("}")
+        if start == -1 or end == -1 or end <= start:
+            return None
+        try:
+            data = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
 
     def _status_from_response(self, response: str) -> str:
         lowered = response.lower()

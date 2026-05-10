@@ -203,8 +203,14 @@ List agents:
 Delegate a task:
 {"oclite_tool":"delegate_task","args":{"agentId":"researcher","task":"Summarize the project state."}}
 
+After a delegate returns, OCLite asks the orchestrator for this exact decision JSON:
+{"oclite_orchestration":"completed","message_to_user":"Final user-facing answer."}
+{"oclite_orchestration":"blocked","message_to_user":"Specific user input or approval needed."}
+{"oclite_orchestration":"delegate_again","message_to_user":"Why another child task is needed.","next_delegate":{"agentId":"coder","task":"Implement sprint 1."}}
+
 Only the orchestrator/default agent may create, delete, seed, or delegate to agents.
 Delegate tasks are one level deep only. Child tasks return results to the orchestrator and must not create child tasks.
+For app/software build requests, the orchestrator should use a solution architect agent for scope/spec/sprint planning, a coder agent for implementation, and repeat one-level child tasks until the final deliverable is ready.
 """,
         "HEARTBEAT.md": "# Heartbeat\n\nNo heartbeat behavior configured yet.\n",
         "BOOT.md": "# Boot\n\nLoad workspace files, then follow the active task.\n",
