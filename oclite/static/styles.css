@@ -192,6 +192,18 @@ article {
   font-size: 30px;
 }
 
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.section-heading h2 {
+  margin-bottom: 0;
+}
+
 form {
   margin-bottom: 14px;
 }

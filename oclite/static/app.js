@@ -1,6 +1,8 @@
 let state = null;
 let activeView = "dashboard";
 let selectedAgentId = "main";
+let refreshInFlight = false;
+let lastRefreshAt = null;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -13,8 +15,20 @@ async function api(path, options = {}) {
 }
 
 async function refresh() {
-  state = await api("/api/state");
-  render();
+  if (refreshInFlight) return;
+  refreshInFlight = true;
+  setLiveStatus("Refreshing...");
+  try {
+    state = await api("/api/state");
+    lastRefreshAt = new Date();
+    render();
+    setLiveStatus(`Live · updated ${lastRefreshAt.toLocaleTimeString()}`);
+  } catch (error) {
+    setLiveStatus(`Live refresh error: ${error.message}`);
+    throw error;
+  } finally {
+    refreshInFlight = false;
+  }
 }
 
 function render() {
@@ -141,6 +155,11 @@ function showView(name) {
   document.querySelectorAll("[data-view-target]").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.viewTarget === name);
   });
+}
+
+function setLiveStatus(text) {
+  const target = document.querySelector("#live-status");
+  if (target) target.textContent = text;
 }
 
 function renderModels() {
@@ -338,7 +357,7 @@ function wireForm(selector, path, transform) {
   });
 }
 
-document.querySelector("#refresh").addEventListener("click", refresh);
+document.querySelector("#refresh").addEventListener("click", () => refresh().catch((error) => alert(error.message)));
 document.querySelector("#update-gateway").addEventListener("click", async () => {
   const button = document.querySelector("#update-gateway");
   button.disabled = true;
@@ -503,4 +522,12 @@ document.querySelector("#task-form").addEventListener("submit", async (event) =>
   }
 });
 
-refresh();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refresh().catch(() => {});
+});
+
+setInterval(() => {
+  if (!document.hidden) refresh().catch(() => {});
+}, 2500);
+
+refresh().catch((error) => alert(error.message));
