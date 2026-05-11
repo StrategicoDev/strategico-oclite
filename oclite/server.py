@@ -136,6 +136,7 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             "tasks": tasks,
             "app": self.app_metadata(),
             "providerPresets": self.store.provider_presets(),
+            "modelPresets": self.store.model_presets(),
             "workspaceFiles": [
                 "AGENTS.md",
                 "SOUL.md",

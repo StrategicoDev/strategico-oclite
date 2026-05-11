@@ -45,7 +45,73 @@ PROVIDER_PRESETS = {
         "auth": "oauth",
         "description": "OpenAI Codex subscription access through OAuth.",
     },
+    "anthropic": {"name": "Anthropic", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "gemini": {"name": "Google Gemini", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "google-gemini-cli": {"name": "Google Gemini CLI", "baseUrl": "", "auth": "oauth", "description": "Direct provider activation name."},
+    "xai": {"name": "xAI", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "deepseek": {"name": "DeepSeek", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "moonshot": {"name": "Moonshot / Kimi", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "kimi-coding": {"name": "Kimi Coding", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "zai": {"name": "Z.ai / GLM", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "minimax": {"name": "MiniMax", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "minimax-oauth": {"name": "MiniMax OAuth", "baseUrl": "", "auth": "oauth", "description": "Direct provider activation name."},
+    "alibaba": {"name": "Qwen / Alibaba DashScope", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "stepfun": {"name": "StepFun", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "xiaomi": {"name": "Xiaomi MiMo", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "tencent-tokenhub": {"name": "Tencent TokenHub", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "arcee": {"name": "Arcee", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "nvidia": {"name": "NVIDIA", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "bedrock": {"name": "AWS Bedrock", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "copilot": {"name": "GitHub Copilot", "baseUrl": "", "auth": "oauth", "description": "Direct provider activation name."},
+    "github-copilot": {"name": "GitHub Copilot", "baseUrl": "", "auth": "oauth", "description": "Alias for copilot direct provider."},
+    "copilot-acp": {"name": "Copilot ACP", "baseUrl": "", "auth": "oauth", "description": "Direct provider activation name."},
+    "opencode-zen": {"name": "OpenCode Zen", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
+    "opencode-go": {"name": "OpenCode Go", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
 }
+
+MODEL_PRESETS = [
+    "openai-codex/gpt-5.5",
+    "openai-codex/gpt-5.4",
+    "openai-codex/gpt-5.4-mini",
+    "openai-codex/gpt-5.3-codex",
+    "openai-codex/gpt-5.2-codex",
+    "openai/gpt-5.4",
+    "openai/gpt-5.4-mini",
+    "openai/gpt-5.3-codex",
+    "openai/gpt-5-mini",
+    "openai/gpt-4.1",
+    "anthropic/claude-opus-4-7",
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-haiku-4-5-20251001",
+    "gemini/gemini-3.1-pro-preview",
+    "gemini/gemini-3-pro-preview",
+    "gemini/gemini-3-flash-preview",
+    "xai/grok-4.20-0309-reasoning",
+    "xai/grok-code-fast-1",
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-chat",
+    "deepseek/deepseek-reasoner",
+    "moonshot/kimi-k2.6",
+    "kimi-coding/kimi-for-coding",
+    "zai/glm-5.1",
+    "minimax/MiniMax-M2.7",
+    "alibaba/qwen3.6-plus",
+    "alibaba/qwen3-coder-plus",
+    "nvidia/deepseek-ai/deepseek-v3.2",
+    "bedrock/us.anthropic.claude-sonnet-4-6",
+    "copilot/gpt-5.4",
+    "copilot/gpt-5.4-mini",
+    "copilot/gpt-5.3-codex",
+    "copilot/claude-sonnet-4.6",
+    "copilot/gemini-3.1-pro-preview",
+    "copilot/grok-code-fast-1",
+    "copilot-acp/copilot-acp",
+    "opencode-zen/gpt-5.4-pro",
+    "opencode-zen/claude-sonnet-4-6",
+    "opencode-go/kimi-k2.6",
+    "opencode-go/qwen3.6-plus",
+]
 
 
 class Store:
@@ -130,6 +196,9 @@ class Store:
             {"id": provider_id, **preset}
             for provider_id, preset in PROVIDER_PRESETS.items()
         ]
+
+    def model_presets(self) -> list[str]:
+        return MODEL_PRESETS.copy()
 
     def setup_dirs_only(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
@@ -404,18 +473,20 @@ class Store:
         provider_id = provider_id.strip()
         if not provider_id:
             raise ValueError("Provider id is required")
-        if provider_id not in PROVIDER_PRESETS or provider_id == "mock":
-            raise ValueError(f"Unsupported provider '{provider_id}'. Choose one of: openai, openai-codex")
+        provider_id = self._canonical_provider_id(provider_id)
+        if provider_id == "mock":
+            raise ValueError("Mock is built in and does not need to be added")
         config = self.config()
         providers = config.setdefault("providers", {})
         existing = providers.get(provider_id, {})
-        preset = PROVIDER_PRESETS[provider_id]
-        api_key_env = data.get("apiKeyEnv") or existing.get("apiKeyEnv") or f"{provider_id.upper()}_API_KEY"
-        base_url = data.get("baseUrl") or existing.get("baseUrl") or preset.get("baseUrl") or "https://api.openai.com/v1"
+        preset = PROVIDER_PRESETS.get(provider_id, {})
+        api_key_env = data.get("apiKeyEnv") or existing.get("apiKeyEnv") or self._env_key_for_provider(provider_id)
+        base_url = data.get("baseUrl") or existing.get("baseUrl") or preset.get("baseUrl", "")
         updated = {
             **existing,
             "apiKeyEnv": api_key_env,
             "baseUrl": base_url,
+            "adapter": data.get("adapter") or existing.get("adapter") or self._default_adapter(provider_id, base_url),
             "maxOutputTokens": int(data.get("maxOutputTokens", existing.get("maxOutputTokens", 1200))),
             "timeoutSeconds": int(data.get("timeoutSeconds", existing.get("timeoutSeconds", 60))),
         }
@@ -435,13 +506,17 @@ class Store:
     def save_model(self, data: dict[str, Any]) -> dict[str, Any]:
         provider_id = data.get("providerId", "").strip()
         model = data.get("model", "").strip()
+        if "/" in model:
+            provider_id, model = model.split("/", 1)
         if not provider_id:
             raise ValueError("Provider is required")
         if not model:
             raise ValueError("Model id is required")
+        provider_id = self._canonical_provider_id(provider_id)
         config = self.config()
         if provider_id != "mock" and provider_id not in config.get("providers", {}):
-            raise ValueError(f"Unknown provider '{provider_id}'")
+            self.save_provider(provider_id, {"providerId": provider_id})
+            config = self.config()
         catalog = config.setdefault("models", {}).setdefault("catalog", [])
         existing = next((entry for entry in catalog if entry.get("providerId") == provider_id and entry.get("model") == model), None)
         if not existing:
@@ -453,6 +528,9 @@ class Store:
     def save_model_alias(self, data: dict[str, Any]) -> dict[str, Any]:
         provider_id = data.get("providerId", "").strip()
         model = data.get("model", "").strip()
+        if "/" in model:
+            provider_id, model = model.split("/", 1)
+        provider_id = self._canonical_provider_id(provider_id)
         alias = data.get("alias", "").strip() or self._default_alias(provider_id, model)
         auth_type = data.get("authType", "api-key").strip() or "api-key"
         if not provider_id:
@@ -516,11 +594,26 @@ class Store:
     def _split_model_ref(self, model_ref: str) -> tuple[str, str]:
         if "/" in model_ref:
             provider_id, model = model_ref.split("/", 1)
-            return provider_id, model
+            return self._canonical_provider_id(provider_id), model
         if ":" in model_ref:
             provider_id, model = model_ref.split(":", 1)
-            return provider_id, model
+            return self._canonical_provider_id(provider_id), model
         return "openai", model_ref
+
+    def _canonical_provider_id(self, provider_id: str) -> str:
+        provider_id = provider_id.strip()
+        if provider_id == "github-copilot":
+            return "copilot"
+        return provider_id
+
+    def _default_adapter(self, provider_id: str, base_url: str) -> str:
+        if provider_id == "openai-codex":
+            return "codex-oauth"
+        if provider_id == "mock":
+            return "mock"
+        if base_url:
+            return "openai-compatible"
+        return "direct"
 
     def _default_alias(self, provider_id: str, model: str) -> str:
         return f"{provider_id}-{model}".replace("/", "-").replace(":", "-")
@@ -528,6 +621,10 @@ class Store:
     def _env_key_for_alias(self, alias: str) -> str:
         clean = "".join(ch if ch.isalnum() else "_" for ch in alias.upper()).strip("_")
         return f"OCLITE_{clean}_API_KEY"
+
+    def _env_key_for_provider(self, provider_id: str) -> str:
+        clean = "".join(ch if ch.isalnum() else "_" for ch in provider_id.upper()).strip("_")
+        return f"{clean}_API_KEY"
 
     def create_agent(self, data: dict[str, Any]) -> Agent:
         config = self.config()

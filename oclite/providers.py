@@ -39,11 +39,15 @@ class ProviderRunner:
 
     def run(self, model: str, instructions: str, message: str) -> str:
         ref = self._resolve_model_ref(model)
-        if ref.provider in ("openai", "openai-codex"):
-            return self._openai_response(ref, instructions, message)
+        provider_config = self._provider_config(ref)
         if ref.provider == "mock":
             return message
-        raise ProviderError(f"Unsupported provider '{ref.provider}' for model '{model}'")
+        if self._can_use_openai_compatible(ref, provider_config):
+            return self._openai_response(ref, instructions, message)
+        raise ProviderError(
+            f"Provider '{ref.provider}' is registered as a direct/custom provider but has no runnable adapter yet. "
+            "Add an OpenAI-compatible base URL or route it through a supported adapter before assigning this model to an active agent."
+        )
 
     def test_auth(self, provider_id: str) -> dict[str, Any]:
         provider_config = self._provider_config(provider_id)
@@ -56,13 +60,22 @@ class ProviderRunner:
                 "modelCount": 0,
                 "models": [],
             }
+        base_url = provider_config.get("baseUrl", "").rstrip("/")
+        if not base_url:
+            return {
+                "ok": True,
+                "providerId": provider_id,
+                "authType": provider_config.get("authType", "custom"),
+                "modelCount": 0,
+                "models": [],
+                "message": "Provider registered without a model-list endpoint.",
+            }
         credential = self._credential(provider_id, provider_config)
         if not credential:
             raise ProviderError(
                 f"Missing API key for '{provider_id}'. Set {provider_config.get('apiKeyEnv', 'OPENAI_API_KEY')} "
                 "or save an API key/OAuth profile for this provider."
             )
-        base_url = provider_config.get("baseUrl", "https://api.openai.com/v1").rstrip("/")
         request = urllib.request.Request(
             f"{base_url}/models",
             headers=self._headers(credential, provider_config),
@@ -87,6 +100,8 @@ class ProviderRunner:
         auth_type = "oauth" if profile else "api-key" if has_api_key else "missing"
         if ref.provider == "openai-codex" and profile:
             endpoint = f"{provider_config.get('codexBaseUrl', 'https://chatgpt.com/backend-api/codex').rstrip('/')}/responses"
+        elif not provider_config.get("baseUrl"):
+            endpoint = "direct/custom provider - no runnable endpoint configured"
         else:
             endpoint = f"{provider_config.get('baseUrl', 'https://api.openai.com/v1').rstrip('/')}/responses"
         return {
@@ -115,7 +130,9 @@ class ProviderRunner:
                 f"Missing API key for '{ref.provider}'. Set {provider_config.get('apiKeyEnv', 'OPENAI_API_KEY')} "
                 "or configure a provider API key/OAuth profile in OCLite."
             )
-        base_url = provider_config.get("baseUrl", "https://api.openai.com/v1").rstrip("/")
+        base_url = provider_config.get("baseUrl", "").rstrip("/")
+        if not base_url:
+            raise ProviderError(f"Provider '{ref.provider}' has no base URL configured")
         body = {
             "model": ref.model,
             "instructions": instructions,
@@ -195,7 +212,7 @@ class ProviderRunner:
     def _provider_config(self, ref: ModelRef | str) -> dict[str, Any]:
         provider = ref.provider if isinstance(ref, ModelRef) else ref
         providers = self.config.get("providers", {})
-        provider_config = dict(providers.get(provider) or providers.get("openai") or {})
+        provider_config = dict(providers.get(provider) or {})
         if isinstance(ref, ModelRef) and ref.alias:
             alias = self.config.get("models", {}).get("aliases", {}).get(ref.alias, {})
             if alias.get("authType"):
@@ -205,6 +222,11 @@ class ProviderRunner:
             if alias.get("profileId"):
                 provider_config["profileId"] = alias["profileId"]
         return provider_config
+
+    def _can_use_openai_compatible(self, ref: ModelRef, provider_config: dict[str, Any]) -> bool:
+        if ref.provider in ("openai", "openai-codex"):
+            return True
+        return provider_config.get("adapter") == "openai-compatible" and bool(provider_config.get("baseUrl"))
 
     def _credential(self, provider: str, provider_config: dict[str, Any]) -> str | None:
         profile = self._oauth_profile(provider, provider_config)

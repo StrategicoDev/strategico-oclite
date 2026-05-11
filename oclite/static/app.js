@@ -230,6 +230,9 @@ function renderModels() {
   const defaultModel = state.config.models.default;
   const providerIds = availableProviderIds();
   const agentModels = agentModelChoices();
+  document.querySelector("#model-options").innerHTML = (state.modelPresets || [])
+    .map((model) => `<option value="${escapeHtml(model)}"></option>`)
+    .join("");
   document.querySelector("#models").innerHTML =
     catalog
       .map((entry) =>
@@ -280,7 +283,7 @@ function renderProviders() {
           </div>
         `;
       })
-      .join("");
+      .join("") + renderCustomProviders(providers, presets);
   const providerIds = Object.keys(providers);
   fillSelect("#auth-provider", providerIds, preferredSelectValue("#auth-provider", providerIds, "openai-codex"));
   fillSelect("#oauth-provider", providerIds, preferredSelectValue("#oauth-provider", providerIds, "openai-codex"));
@@ -404,6 +407,23 @@ function providerPreset(providerId) {
   return (state.providerPresets || []).find((preset) => preset.id === providerId);
 }
 
+function renderCustomProviders(providers, presets) {
+  const known = new Set(presets.map((preset) => preset.id));
+  return Object.entries(providers)
+    .filter(([id]) => !known.has(id))
+    .map(([id, provider]) => `
+      <div class="provider-row configured">
+        <div>
+          <strong>${escapeHtml(id)}</strong>
+          <small>custom provider</small>
+        </div>
+        <small>${escapeHtml(provider.baseUrl || "direct/custom")}</small>
+        <span class="pill">available</span>
+      </div>
+    `)
+    .join("");
+}
+
 function validateProviderInput() {
   const input = document.querySelector("#provider-id");
   const baseUrl = document.querySelector("#provider-base-url");
@@ -416,16 +436,23 @@ function validateProviderInput() {
     status.textContent = "Choose a supported provider name.";
     return;
   }
-  if (!preset || providerId === "mock") {
+  if (providerId === "mock") {
     button.disabled = true;
-    status.textContent = "Unsupported provider. Use openai or openai-codex.";
+    status.textContent = "Mock is built in and does not need to be added.";
+    return;
+  }
+  if (!preset) {
+    button.disabled = false;
+    status.textContent = "Custom provider. Add a base URL now if it has an OpenAI-compatible endpoint, or leave blank for direct activation setup.";
     return;
   }
   if (!baseUrl.value.trim() && preset.baseUrl) {
     baseUrl.value = preset.baseUrl;
   }
   button.disabled = false;
-  status.textContent = `${preset.name} verified. Base URL populated.`;
+  status.textContent = preset.baseUrl
+    ? `${preset.name} verified. Base URL populated.`
+    : `${preset.name} verified. No base URL required for direct activation setup.`;
 }
 
 function renderTelegram() {

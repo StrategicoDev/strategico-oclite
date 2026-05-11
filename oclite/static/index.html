@@ -226,7 +226,7 @@
               <input id="provider-base-url" name="baseUrl" placeholder="base URL" />
               <button>Add Provider</button>
             </form>
-            <small id="provider-verify-status">Choose a supported provider name.</small>
+            <small id="provider-verify-status">Choose a known provider or enter a custom provider name.</small>
             <div id="providers" class="provider-list"></div>
           </article>
 
@@ -258,7 +258,8 @@
             <h2>2. Models</h2>
             <form id="model-form" class="stack">
               <select name="providerId" id="model-provider"></select>
-              <input name="model" placeholder="model id, e.g. gpt-5.5" />
+              <input name="model" list="model-options" placeholder="model id or provider/model, e.g. copilot/gpt-5.4" />
+              <datalist id="model-options"></datalist>
               <button>Add Model</button>
             </form>
             <div id="models" class="list"></div>

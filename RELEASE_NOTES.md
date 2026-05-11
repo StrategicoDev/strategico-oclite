@@ -1,5 +1,13 @@
 # OCLite Release Notes
 
+## 0.2.1 - 2026-05-11
+
+- Changed provider setup from a restrictive allowlist to an open provider registry.
+- Added direct provider activation suggestions from OpenClaw/Hermes-style model strings.
+- Allowed custom providers and custom provider/model combinations to be registered.
+- Added model activation autocomplete for common `provider/model` strings.
+- Added clearer runtime errors for direct providers that still need an adapter or OpenAI-compatible base URL.
+
 ## 0.2.0 - 2026-05-11
 
 - Added app version metadata and release notes in the control UI.
