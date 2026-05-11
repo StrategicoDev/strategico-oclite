@@ -101,6 +101,11 @@ class AgentRuntime:
         channel: str = "",
         source: str = "",
     ) -> str:
+        command_response = self._handle_runtime_command(agent, message, session_id)
+        if command_response is not None:
+            self.store.append_session_event(session_id, {"role": "user", "content": message})
+            self.store.append_session_event(session_id, {"role": "assistant", "content": command_response})
+            return command_response
         recent_limit = int((agent.context or {}).get("recentTurns", 16))
         recent_events = self.store.recent_session_events(session_id, recent_limit)
         recent_tasks = self.store.recent_session_tasks(session_id, 5)
@@ -153,6 +158,42 @@ class AgentRuntime:
                 "Use Agents -> Create, assign an authorized model, then bind a Telegram bot."
             )
         return f"{agent.name} received: {message}"
+
+    def _handle_runtime_command(self, agent: Agent, message: str, session_id: str) -> str | None:
+        command = self._command_name(message)
+        if command == "/model":
+            return self._model_command_response(agent, session_id)
+        return None
+
+    def _command_name(self, message: str) -> str:
+        text = str(message or "").strip()
+        if not text.startswith("/"):
+            return ""
+        first = text.split()[0].lower()
+        return first.split("@", 1)[0]
+
+    def _model_command_response(self, agent: Agent, session_id: str) -> str:
+        config = self.store.config()
+        aliases = config.get("models", {}).get("aliases", {})
+        alias = aliases.get(agent.model)
+        diagnostics = ProviderRunner(config, self.store.home).diagnostics(agent.model)
+        auth = diagnostics.get("authType", "unknown")
+        if auth == "oauth":
+            auth_label = f"OAuth profile '{diagnostics.get('profileId', 'default')}' linked"
+        elif auth == "api-key":
+            auth_label = "API key configured"
+        else:
+            auth_label = "missing auth"
+        alias_label = agent.model if alias else "direct model reference"
+        return (
+            "Current session model\n"
+            f"Agent: {agent.name} ({agent.id})\n"
+            f"Session: {session_id}\n"
+            f"Alias: {alias_label}\n"
+            f"Provider: {diagnostics.get('provider', 'unknown')}\n"
+            f"Model: {diagnostics.get('model', agent.model)}\n"
+            f"Auth: {auth_label}"
+        )
 
     def _format_recent_events(self, events: list[dict[str, Any]]) -> str:
         lines: list[str] = []

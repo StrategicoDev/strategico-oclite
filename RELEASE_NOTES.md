@@ -1,5 +1,11 @@
 # OCLite Release Notes
 
+## 0.2.7 - 2026-05-11
+
+- Added the `/model` runtime command for Telegram and local sessions.
+- `/model` reports the current agent, session, model alias, resolved provider/model, and auth state without calling the LLM.
+- Runtime slash commands no longer create tracked tasks.
+
 ## 0.2.6 - 2026-05-11
 
 - Added per-exposed-model status in the Models list.
