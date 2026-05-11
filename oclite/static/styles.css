@@ -199,6 +199,30 @@ strong {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.expose-model-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.expose-model-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 0;
+}
+
+.expose-model-form label:not(.check) {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.expose-model-form .check {
+  min-height: 38px;
+  align-self: end;
+}
+
 .alias-form {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
@@ -568,6 +592,7 @@ pre {
   .task-row,
   .inline-form,
   .alias-form,
+  .expose-model-form,
   .provider-add-row,
   .provider-row,
   .agent-selector-row,

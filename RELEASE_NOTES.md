@@ -1,5 +1,12 @@
 # OCLite Release Notes
 
+## 0.2.2 - 2026-05-11
+
+- Simplified the Models page into one primary Expose Model workflow.
+- Changed provider setup to an alphabetized valid-provider catalogue instead of manual provider entry.
+- Added provider validation so new exposed models must use a known provider id.
+- Kept OAuth and auth diagnostics available without making providers the main setup step.
+
 ## 0.2.1 - 2026-05-11
 
 - Changed provider setup from a restrictive allowlist to an open provider registry.

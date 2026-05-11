@@ -192,10 +192,12 @@ class Store:
         self._write_config(config)
 
     def provider_presets(self) -> list[dict[str, str]]:
-        return [
+        presets = [
             {"id": provider_id, **preset}
             for provider_id, preset in PROVIDER_PRESETS.items()
+            if provider_id != "github-copilot"
         ]
+        return sorted(presets, key=lambda preset: (preset.get("name", "").lower(), preset["id"]))
 
     def model_presets(self) -> list[str]:
         return MODEL_PRESETS.copy()
@@ -476,6 +478,9 @@ class Store:
         provider_id = self._canonical_provider_id(provider_id)
         if provider_id == "mock":
             raise ValueError("Mock is built in and does not need to be added")
+        if provider_id not in PROVIDER_PRESETS:
+            valid = ", ".join(sorted(preset["id"] for preset in self.provider_presets() if preset["id"] != "mock"))
+            raise ValueError(f"Unsupported provider '{provider_id}'. Choose one of: {valid}")
         config = self.config()
         providers = config.setdefault("providers", {})
         existing = providers.get(provider_id, {})

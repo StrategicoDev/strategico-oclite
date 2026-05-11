@@ -225,23 +225,10 @@ function setLiveStatus(text) {
 
 function renderModels() {
   const modelConfig = state.config.models || {};
-  const catalog = modelConfig.catalog || [];
   const aliases = modelConfig.aliases || {};
   const defaultModel = state.config.models.default;
-  const providerIds = availableProviderIds();
+  const providerIds = validProviderIds();
   const agentModels = agentModelChoices();
-  document.querySelector("#model-options").innerHTML = (state.modelPresets || [])
-    .map((model) => `<option value="${escapeHtml(model)}"></option>`)
-    .join("");
-  document.querySelector("#models").innerHTML =
-    catalog
-      .map((entry) =>
-        item(`
-          <header><strong>${escapeHtml(entry.model)}</strong><span class="pill">${escapeHtml(entry.providerId)}</span></header>
-          <small>${escapeHtml(modelRef(entry.providerId, entry.model))}</small>
-        `)
-      )
-      .join("") || item("<small>No provider models yet</small>");
   document.querySelector("#model-aliases").innerHTML =
     Object.values(aliases)
       .map((alias) =>
@@ -255,18 +242,14 @@ function renderModels() {
       .join("") || item("<small>No aliases yet</small>");
   fillSelect("#agent-model", agentModels, defaultModel);
   fillSelect("#set-agent-model", agentModels, defaultModel);
-  fillSelect("#model-provider", providerIds, preferredSelectValue("#model-provider", providerIds, "openai-codex"));
   fillSelect("#alias-provider", providerIds, preferredSelectValue("#alias-provider", providerIds, "openai-codex"));
-  syncAliasModelSelect();
+  syncAliasModelSuggestions();
+  syncAliasAuthFields();
 }
 
 function renderProviders() {
   const providers = state.config.providers || {};
-  const presets = state.providerPresets || [];
-  document.querySelector("#provider-options").innerHTML = presets
-    .filter((preset) => preset.id !== "mock")
-    .map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</option>`)
-    .join("");
+  const presets = sortedProviderPresets();
   document.querySelector("#providers").innerHTML =
     presets
       .map((preset) => {
@@ -283,12 +266,11 @@ function renderProviders() {
           </div>
         `;
       })
-      .join("") + renderCustomProviders(providers, presets);
-  const providerIds = Object.keys(providers);
+      .join("");
+  const providerIds = sortedConfiguredProviderIds();
   fillSelect("#auth-provider", providerIds, preferredSelectValue("#auth-provider", providerIds, "openai-codex"));
   fillSelect("#oauth-provider", providerIds, preferredSelectValue("#oauth-provider", providerIds, "openai-codex"));
   renderAuthProfiles();
-  validateProviderInput();
 }
 
 async function renderAuthProfiles() {
@@ -374,9 +356,23 @@ function recentTurns(agent) {
   return Number.isFinite(value) ? value : 16;
 }
 
-function availableProviderIds() {
-  const providers = Object.keys(state.config.providers || {});
-  return providers.includes("mock") ? providers : ["mock", ...providers];
+function validProviderIds() {
+  return sortedProviderPresets()
+    .filter((preset) => preset.id !== "mock")
+    .map((preset) => preset.id);
+}
+
+function sortedConfiguredProviderIds() {
+  const known = new Set(validProviderIds());
+  return Object.keys(state.config.providers || {})
+    .filter((providerId) => known.has(providerId))
+    .sort((a, b) => providerLabel(a).localeCompare(providerLabel(b)));
+}
+
+function sortedProviderPresets() {
+  return [...(state.providerPresets || [])]
+    .filter((preset) => preset.id !== "github-copilot")
+    .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
 }
 
 function agentModelChoices() {
@@ -389,11 +385,33 @@ function modelRef(providerId, model) {
   return providerId === "mock" ? `${providerId}:${model}` : `${providerId}/${model}`;
 }
 
-function syncAliasModelSelect() {
+function syncAliasModelSuggestions() {
   const providerId = document.querySelector("#alias-provider").value;
   const catalog = state.config.models.catalog || [];
-  const values = catalog.filter((entry) => entry.providerId === providerId).map((entry) => entry.model);
-  fillSelect("#alias-model", values, preferredSelectValue("#alias-model", values, values[0]));
+  const values = new Set();
+  catalog
+    .filter((entry) => entry.providerId === providerId)
+    .forEach((entry) => values.add(entry.model));
+  (state.modelPresets || []).forEach((ref) => {
+    if (!ref.includes("/")) return;
+    const [presetProvider, presetModel] = ref.split("/", 2);
+    if (presetProvider === providerId) values.add(presetModel);
+  });
+  document.querySelector("#model-options").innerHTML = [...values]
+    .sort((a, b) => a.localeCompare(b))
+    .map((model) => `<option value="${escapeHtml(model)}"></option>`)
+    .join("");
+  const preset = providerPreset(providerId);
+  document.querySelector("#model-provider-status").textContent = preset
+    ? `${preset.name} selected. Enter the exact model id you want agents to use.`
+    : "Choose a valid provider from the catalogue.";
+}
+
+function syncAliasProviderDefaults() {
+  const preset = providerPreset(document.querySelector("#alias-provider").value);
+  if (!preset) return;
+  document.querySelector("#alias-auth-type").value = preset.auth || "api-key";
+  syncAliasModelSuggestions();
   syncAliasAuthFields();
 }
 
@@ -407,52 +425,9 @@ function providerPreset(providerId) {
   return (state.providerPresets || []).find((preset) => preset.id === providerId);
 }
 
-function renderCustomProviders(providers, presets) {
-  const known = new Set(presets.map((preset) => preset.id));
-  return Object.entries(providers)
-    .filter(([id]) => !known.has(id))
-    .map(([id, provider]) => `
-      <div class="provider-row configured">
-        <div>
-          <strong>${escapeHtml(id)}</strong>
-          <small>custom provider</small>
-        </div>
-        <small>${escapeHtml(provider.baseUrl || "direct/custom")}</small>
-        <span class="pill">available</span>
-      </div>
-    `)
-    .join("");
-}
-
-function validateProviderInput() {
-  const input = document.querySelector("#provider-id");
-  const baseUrl = document.querySelector("#provider-base-url");
-  const button = document.querySelector("#provider-form button");
-  const status = document.querySelector("#provider-verify-status");
-  const providerId = input.value.trim();
+function providerLabel(providerId) {
   const preset = providerPreset(providerId);
-  if (!providerId) {
-    button.disabled = true;
-    status.textContent = "Choose a supported provider name.";
-    return;
-  }
-  if (providerId === "mock") {
-    button.disabled = true;
-    status.textContent = "Mock is built in and does not need to be added.";
-    return;
-  }
-  if (!preset) {
-    button.disabled = false;
-    status.textContent = "Custom provider. Add a base URL now if it has an OpenAI-compatible endpoint, or leave blank for direct activation setup.";
-    return;
-  }
-  if (!baseUrl.value.trim() && preset.baseUrl) {
-    baseUrl.value = preset.baseUrl;
-  }
-  button.disabled = false;
-  status.textContent = preset.baseUrl
-    ? `${preset.name} verified. Base URL populated.`
-    : `${preset.name} verified. No base URL required for direct activation setup.`;
+  return preset ? preset.name : providerId;
 }
 
 function renderTelegram() {
@@ -623,9 +598,8 @@ document.querySelector("#task-limit").addEventListener("change", (event) => {
   localStorage.setItem("ocliteTaskLimit", String(taskLimit));
   renderTasks();
 });
-document.querySelector("#alias-provider").addEventListener("change", syncAliasModelSelect);
+document.querySelector("#alias-provider").addEventListener("change", syncAliasProviderDefaults);
 document.querySelector("#alias-auth-type").addEventListener("change", syncAliasAuthFields);
-document.querySelector("#provider-id").addEventListener("input", validateProviderInput);
 document.addEventListener("click", async (event) => {
   const row = event.target.closest("[data-task-select]");
   if (row) {
@@ -676,13 +650,11 @@ wireForm("#bot-form", "/api/telegram/bots", (form) => {
 });
 wireForm("#allow-form", "/api/telegram/allow");
 wireForm("#bind-form", "/api/agents/bind");
-wireForm("#model-form", "/api/models/register");
 wireForm("#model-alias-form", "/api/models/alias", (form) => {
   const data = formJson(form);
   data.makeDefault = form.elements.makeDefault.checked;
   return data;
 });
-wireForm("#provider-form", "/api/providers");
 
 document.querySelector("#provider-auth-form").addEventListener("submit", async (event) => {
   event.preventDefault();

@@ -218,19 +218,46 @@
 
       <section class="view" data-view="models">
         <div class="grid model-setup">
-          <article class="wide provider-panel">
-            <h2>Providers</h2>
-            <form id="provider-form" class="provider-add-row">
-              <input id="provider-id" name="providerId" list="provider-options" placeholder="provider id, e.g. openai-codex" />
-              <datalist id="provider-options"></datalist>
-              <input id="provider-base-url" name="baseUrl" placeholder="base URL" />
-              <button>Add Provider</button>
+          <article class="wide expose-model-panel">
+            <h2>Expose Model</h2>
+            <form id="model-alias-form" class="expose-model-form">
+              <label>
+                <span class="field-label">Provider</span>
+                <select name="providerId" id="alias-provider"></select>
+              </label>
+              <label>
+                <span class="field-label">Model</span>
+                <input name="model" id="alias-model-input" list="model-options" placeholder="model id, e.g. gpt-5.5" />
+                <datalist id="model-options"></datalist>
+              </label>
+              <label>
+                <span class="field-label">Agent Alias</span>
+                <input name="alias" placeholder="alias agents use, optional" />
+              </label>
+              <label>
+                <span class="field-label">Auth</span>
+                <select name="authType" id="alias-auth-type">
+                  <option value="api-key">API key</option>
+                  <option value="oauth">OAuth</option>
+                  <option value="none">No auth</option>
+                </select>
+              </label>
+              <label>
+                <span class="field-label">API Key</span>
+                <input name="apiKey" id="alias-api-key" placeholder="optional, saved to .oclite/.env" />
+              </label>
+              <label>
+                <span class="field-label">OAuth Profile</span>
+                <input name="profileId" id="alias-profile-id" placeholder="default" value="default" />
+              </label>
+              <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
+              <button>Expose Model</button>
             </form>
-            <small id="provider-verify-status">Choose a known provider or enter a custom provider name.</small>
-            <div id="providers" class="provider-list"></div>
+            <small id="model-provider-status">Choose a valid provider from the catalogue, enter the model id you want to expose, and save it as an agent-facing alias.</small>
           </article>
 
           <article class="wide provider-actions">
+            <h2>Auth & Diagnostics</h2>
             <form id="oauth-start-form" class="inline-form">
               <select name="providerId" id="oauth-provider"></select>
               <input name="profileId" type="hidden" value="default" />
@@ -254,34 +281,15 @@
             <div id="auth-profiles" class="list"></div>
           </article>
 
-          <article>
-            <h2>2. Models</h2>
-            <form id="model-form" class="stack">
-              <select name="providerId" id="model-provider"></select>
-              <input name="model" list="model-options" placeholder="model id or provider/model, e.g. copilot/gpt-5.4" />
-              <datalist id="model-options"></datalist>
-              <button>Add Model</button>
-            </form>
-            <div id="models" class="list"></div>
+          <article class="wide">
+            <h2>Exposed Models</h2>
+            <div id="model-aliases" class="list"></div>
           </article>
 
-          <article class="wide">
-            <h2>3. Agent Model Aliases</h2>
-            <form id="model-alias-form" class="alias-form">
-              <input name="alias" placeholder="alias agents use, e.g. strategist" />
-              <select name="providerId" id="alias-provider"></select>
-              <select name="model" id="alias-model"></select>
-              <select name="authType" id="alias-auth-type">
-                <option value="api-key">API key</option>
-                <option value="oauth">OAuth</option>
-                <option value="none">No auth</option>
-              </select>
-              <input name="apiKey" id="alias-api-key" placeholder="API key, saved to .oclite/.env" />
-              <input name="profileId" id="alias-profile-id" placeholder="OAuth profile, default" value="default" />
-              <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
-              <button>Create Alias</button>
-            </form>
-            <div id="model-aliases" class="list"></div>
+          <article class="wide provider-panel">
+            <h2>Valid Provider Catalogue</h2>
+            <small>Only providers in this alphabetized catalogue can be selected above. OCLite stores the provider automatically when you expose a model.</small>
+            <div id="providers" class="provider-list"></div>
           </article>
         </div>
       </section>
