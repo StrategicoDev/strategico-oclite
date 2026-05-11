@@ -3,7 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 import secrets
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -18,6 +20,9 @@ OPENAI_CODEX_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
 OPENAI_CODEX_TOKEN_URL = "https://auth.openai.com/oauth/token"
 OPENAI_CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback"
 OPENAI_CODEX_SCOPE = "openid profile email offline_access"
+GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code"
+GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_COPILOT_TOKEN_ENV = ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
 
 
 class OAuthError(RuntimeError):
@@ -120,6 +125,150 @@ def start_openai_codex_oauth(home: Path, profile_id: str = "default") -> dict[st
         "authUrl": f"{OPENAI_CODEX_AUTHORIZE_URL}?{urllib.parse.urlencode(params)}",
         "redirectUri": OPENAI_CODEX_REDIRECT_URI,
     }
+
+
+def start_github_copilot_oauth(home: Path, profile_id: str = "default") -> dict[str, Any]:
+    imported = import_github_copilot_token(home, profile_id)
+    if imported:
+        return {
+            "providerId": "copilot",
+            "profileId": profile_id or "default",
+            "status": "complete",
+            "message": imported["message"],
+        }
+    client_id = os.environ.get("OCLITE_GITHUB_OAUTH_CLIENT_ID", "").strip()
+    if not client_id:
+        raise OAuthError(
+            "GitHub Copilot OAuth needs either COPILOT_GITHUB_TOKEN/GH_TOKEN/GITHUB_TOKEN, "
+            "a GitHub CLI login, or OCLITE_GITHUB_OAUTH_CLIENT_ID for device login."
+        )
+    body = urllib.parse.urlencode({"client_id": client_id}).encode("utf-8")
+    request = urllib.request.Request(
+        GITHUB_DEVICE_CODE_URL,
+        data=body,
+        headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise OAuthError(f"GitHub device login failed: {exc}") from exc
+    if data.get("error"):
+        raise OAuthError(f"GitHub device login failed: {data.get('error_description') or data['error']}")
+    state = secrets.token_urlsafe(24)
+    AuthStore(home).save_pending(
+        {
+            "providerId": "copilot",
+            "profileId": profile_id or "default",
+            "state": state,
+            "clientId": client_id,
+            "deviceCode": data["device_code"],
+            "interval": int(data.get("interval", 5)),
+            "expiresAt": int(time.time()) + int(data.get("expires_in", 900)),
+            "createdAt": int(time.time()),
+        }
+    )
+    return {
+        "providerId": "copilot",
+        "profileId": profile_id or "default",
+        "status": "pending",
+        "authUrl": data["verification_uri"],
+        "verificationUri": data["verification_uri"],
+        "userCode": data["user_code"],
+        "state": state,
+        "interval": int(data.get("interval", 5)),
+        "expiresIn": int(data.get("expires_in", 900)),
+    }
+
+
+def import_github_copilot_token(home: Path, profile_id: str = "default") -> dict[str, Any] | None:
+    for env_name in GITHUB_COPILOT_TOKEN_ENV:
+        token = os.environ.get(env_name, "").strip()
+        if token:
+            profile = AuthStore(home).save_profile(
+                "copilot",
+                profile_id or "default",
+                {
+                    "access_token": token,
+                    "expires_in": 60 * 60 * 24 * 365,
+                    "token_type": "Bearer",
+                    "account_id": env_name,
+                },
+            )
+            return {"profile": profile, "message": f"Imported GitHub token from {env_name}."}
+    try:
+        result = subprocess.run(
+            ["gh", "auth", "token"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    token = result.stdout.strip()
+    if result.returncode == 0 and token:
+        profile = AuthStore(home).save_profile(
+            "copilot",
+            profile_id or "default",
+            {
+                "access_token": token,
+                "expires_in": 60 * 60 * 24 * 365,
+                "token_type": "Bearer",
+                "account_id": "gh auth token",
+            },
+        )
+        return {"profile": profile, "message": "Imported GitHub token from GitHub CLI."}
+    return None
+
+
+def poll_github_copilot_oauth(home: Path, state: str) -> dict[str, Any]:
+    auth_store = AuthStore(home)
+    pending = auth_store.load_pending(state)
+    if pending.get("providerId") != "copilot":
+        raise OAuthError("Pending OAuth login is not for GitHub Copilot")
+    if int(time.time()) >= int(pending.get("expiresAt", 0)):
+        auth_store.clear_pending()
+        raise OAuthError("GitHub device login expired")
+    body = urllib.parse.urlencode(
+        {
+            "client_id": pending["clientId"],
+            "device_code": pending["deviceCode"],
+            "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        }
+    ).encode("utf-8")
+    request = urllib.request.Request(
+        GITHUB_ACCESS_TOKEN_URL,
+        data=body,
+        headers={"Accept": "application/json", "Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:
+        raise OAuthError(f"GitHub device token exchange failed: {exc}") from exc
+    error = data.get("error")
+    if error == "authorization_pending":
+        return {"providerId": "copilot", "profileId": pending["profileId"], "status": "pending"}
+    if error == "slow_down":
+        pending["interval"] = int(pending.get("interval", 5)) + 5
+        auth_store.save_pending(pending)
+        return {"providerId": "copilot", "profileId": pending["profileId"], "status": "pending", "slowDown": True}
+    if error:
+        raise OAuthError(f"GitHub device token exchange failed: {data.get('error_description') or error}")
+    auth_store.clear_pending()
+    profile = auth_store.save_profile(
+        "copilot",
+        pending["profileId"],
+        {
+            "access_token": data["access_token"],
+            "expires_in": 60 * 60 * 24 * 365,
+            "token_type": data.get("token_type", "Bearer"),
+            "account_id": "github device login",
+        },
+    )
+    return {"providerId": "copilot", "profileId": pending["profileId"], "status": "complete", "profile": profile}
 
 
 def complete_openai_codex_oauth(home: Path, code: str, state: str) -> dict[str, Any]:

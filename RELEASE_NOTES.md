@@ -1,5 +1,12 @@
 # OCLite Release Notes
 
+## 0.2.12 - 2026-05-11
+
+- Added a GitHub Copilot OAuth/token import route.
+- Copilot auth can import `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token`.
+- Added optional GitHub device login support when `OCLITE_GITHUB_OAUTH_CLIENT_ID` is configured.
+- Kept Copilot as provider authentication only until a runnable Copilot model adapter is added.
+
 ## 0.2.11 - 2026-05-11
 
 - Added Remove actions for exposed model aliases.

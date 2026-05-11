@@ -411,9 +411,8 @@ function sortedConfiguredProviderIds() {
 }
 
 function supportedOAuthProviderIds() {
-  const configured = new Set(Object.keys(state.config.providers || {}));
-  return exposableProviderPresets()
-    .filter((preset) => preset.oauthSupported && configured.has(preset.id))
+  return sortedProviderPresets()
+    .filter((preset) => preset.oauthSupported)
     .map((preset) => preset.id);
 }
 
@@ -900,14 +899,45 @@ async function startProviderOAuth(providerId, profileId = "default", targetWindo
     method: "POST",
     body: JSON.stringify({ providerId, profileId }),
   });
-  document.querySelector("#oauth-output").textContent =
-    `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`;
+  if (result.status === "complete") {
+    document.querySelector("#oauth-output").textContent = `OAuth linked: ${result.providerId}:${result.profileId}\n${result.message || ""}`;
+    await refresh();
+    return result;
+  }
+  const isDeviceLogin = result.userCode && result.state;
+  document.querySelector("#oauth-output").textContent = isDeviceLogin
+    ? `GitHub device login for ${result.providerId}:${result.profileId}\nOpen: ${result.authUrl}\nCode: ${result.userCode}\n\nWaiting for authorization...`
+    : `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`;
   if (targetWindow) {
     targetWindow.location.href = result.authUrl;
   } else {
     window.open(result.authUrl, "_blank", "noopener,noreferrer");
   }
+  if (isDeviceLogin) {
+    await pollProviderOAuth(result.providerId, result.state, result.interval || 5);
+  }
   return result;
+}
+
+async function pollProviderOAuth(providerId, stateId, intervalSeconds = 5) {
+  const output = document.querySelector("#oauth-output");
+  let intervalMs = Math.max(3, Number(intervalSeconds || 5)) * 1000;
+  const started = Date.now();
+  while (Date.now() - started < 15 * 60 * 1000) {
+    await sleep(intervalMs);
+    const result = await api("/api/oauth/poll", {
+      method: "POST",
+      body: JSON.stringify({ providerId, state: stateId }),
+    });
+    if (result.status === "complete") {
+      output.textContent = `OAuth linked: ${result.providerId}:${result.profileId}`;
+      await refresh();
+      return result;
+    }
+    if (result.slowDown) intervalMs += 5000;
+    output.textContent = `Waiting for GitHub authorization for ${result.providerId}:${result.profileId}...`;
+  }
+  throw new Error("GitHub device login timed out. Start OAuth again when you are ready.");
 }
 
 document.querySelector("#oauth-complete-form").addEventListener("submit", async (event) => {

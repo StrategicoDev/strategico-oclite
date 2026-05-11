@@ -12,7 +12,14 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from .models import Agent
-from .oauth import AuthStore, OAuthError, complete_openai_codex_oauth, start_openai_codex_oauth
+from .oauth import (
+    AuthStore,
+    OAuthError,
+    complete_openai_codex_oauth,
+    poll_github_copilot_oauth,
+    start_github_copilot_oauth,
+    start_openai_codex_oauth,
+)
 from .providers import ProviderError, ProviderRunner
 from .runtime import AgentRuntime, TelegramPoller
 from .store import Store
@@ -105,6 +112,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 return self.auth_provider()
             if parsed.path == "/api/oauth/start":
                 return self.start_oauth()
+            if parsed.path == "/api/oauth/poll":
+                return self.poll_oauth()
             if parsed.path == "/api/oauth/complete":
                 return self.complete_oauth()
             if parsed.path == "/api/system/update":
@@ -283,9 +292,20 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
     def start_oauth(self) -> None:
         data = self.read_json()
         provider_id = data.get("providerId", "openai-codex")
-        if provider_id != "openai-codex":
-            raise OAuthError("Only openai-codex OAuth is supported right now")
-        result = start_openai_codex_oauth(self.store.home, data.get("profileId", "default"))
+        if provider_id == "openai-codex":
+            result = start_openai_codex_oauth(self.store.home, data.get("profileId", "default"))
+        elif provider_id in {"copilot", "github-copilot"}:
+            result = start_github_copilot_oauth(self.store.home, data.get("profileId", "default"))
+        else:
+            raise OAuthError("Only openai-codex and GitHub Copilot OAuth are supported right now")
+        self.json_response(result)
+
+    def poll_oauth(self) -> None:
+        data = self.read_json()
+        provider_id = data.get("providerId", "")
+        if provider_id not in {"copilot", "github-copilot"}:
+            raise OAuthError("OAuth polling is only supported for GitHub Copilot device login")
+        result = poll_github_copilot_oauth(self.store.home, data["state"])
         self.json_response(result)
 
     def complete_oauth(self) -> None:

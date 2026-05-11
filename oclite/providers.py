@@ -319,6 +319,9 @@ class ProviderRunner:
                     except OAuthError as exc:
                         raise ProviderError(str(exc)) from exc
                 return profile
+        if provider == "copilot" and self.home:
+            profile_id = provider_config.get("profileId", "default")
+            return AuthStore(self.home).get_profile(provider, profile_id)
         return None
 
     def _headers(self, api_key: str, provider_config: dict[str, Any]) -> dict[str, str]:
