@@ -1,5 +1,12 @@
 # OCLite Release Notes
 
+## 0.2.5 - 2026-05-11
+
+- Made the Expose Model form more compact.
+- Listed exposed models as dense rows instead of large cards.
+- Drove the auth selector from the selected provider's supported auth method.
+- Started OAuth automatically from Expose Model when an OAuth-backed provider is selected.
+
 ## 0.2.4 - 2026-05-11
 
 - Reduced model setup to only show providers that OCLite can authenticate and run today.

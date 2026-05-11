@@ -237,27 +237,26 @@
               <label>
                 <span class="field-label">Auth</span>
                 <select name="authType" id="alias-auth-type">
-                  <option value="api-key">API key</option>
-                  <option value="oauth">OAuth</option>
-                  <option value="none">No auth</option>
                 </select>
               </label>
-              <label>
+              <label id="alias-api-key-row">
                 <span class="field-label">API Key</span>
                 <input name="apiKey" id="alias-api-key" placeholder="optional, saved to .oclite/.env" />
               </label>
-              <label>
-                <span class="field-label">OAuth Profile</span>
-                <input name="profileId" id="alias-profile-id" placeholder="default" value="default" />
-              </label>
+              <input name="profileId" id="alias-profile-id" type="hidden" value="default" />
               <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
               <button>Expose Model</button>
             </form>
             <small id="model-provider-status">Choose an available provider, enter the model id you want to expose, and save it as an agent-facing alias.</small>
           </article>
 
-          <article class="wide provider-actions">
-            <h2>Auth & Diagnostics</h2>
+          <article class="wide compact-section">
+            <h2>Exposed Models</h2>
+            <div id="model-aliases" class="model-list"></div>
+          </article>
+
+          <details class="wide provider-actions advanced-panel">
+            <summary>Auth diagnostics</summary>
             <small id="oauth-help">OAuth connect is only shown for providers with a supported OAuth adapter.</small>
             <form id="oauth-start-form" class="inline-form">
               <select name="providerId" id="oauth-provider"></select>
@@ -280,14 +279,9 @@
               </form>
             </details>
             <div id="auth-profiles" class="list"></div>
-          </article>
+          </details>
 
-          <article class="wide">
-            <h2>Exposed Models</h2>
-            <div id="model-aliases" class="list"></div>
-          </article>
-
-          <article class="wide provider-panel">
+          <article class="wide provider-panel compact-section">
             <h2>Available Providers</h2>
             <small>Only providers with working auth and runtime support are shown here.</small>
             <div id="providers" class="provider-list"></div>

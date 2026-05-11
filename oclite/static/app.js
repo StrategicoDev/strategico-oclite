@@ -229,22 +229,34 @@ function renderModels() {
   const defaultModel = state.config.models.default;
   const providerIds = validProviderIds();
   const agentModels = agentModelChoices();
-  document.querySelector("#model-aliases").innerHTML =
-    Object.values(aliases)
-      .map((alias) =>
-        item(`
-          <header><strong>${escapeHtml(alias.alias)}</strong>${alias.alias === defaultModel ? '<span class="pill">default</span>' : ""}</header>
-          <small>${escapeHtml(alias.providerId)} / ${escapeHtml(alias.model)} · ${escapeHtml(alias.authType || "api-key")}</small>
-          ${alias.apiKeyEnv ? `<br /><small>env: ${escapeHtml(alias.apiKeyEnv)}</small>` : ""}
-          ${alias.profileId ? `<br /><small>OAuth profile: ${escapeHtml(alias.profileId)}</small>` : ""}
-        `)
-      )
-      .join("") || item("<small>No aliases yet</small>");
+  const aliasRows = Object.values(aliases).map((alias) => renderModelAliasRow(alias, defaultModel)).join("");
+  document.querySelector("#model-aliases").innerHTML = aliasRows
+    ? `<div class="model-row model-row-head"><span>Alias</span><span>Provider</span><span>Model</span><span>Auth</span><span>Status</span></div>${aliasRows}`
+    : `<div class="empty-row">No exposed models yet</div>`;
   fillSelect("#agent-model", agentModels, defaultModel);
   fillSelect("#set-agent-model", agentModels, defaultModel);
   fillSelect("#alias-provider", providerIds, preferredSelectValue("#alias-provider", providerIds, "openai-codex"));
+  syncAliasAuthOptions();
   syncAliasModelSuggestions();
   syncAliasAuthFields();
+}
+
+function renderModelAliasRow(alias, defaultModel) {
+  const auth = alias.authType || "api-key";
+  const credential = auth === "oauth"
+    ? `OAuth: ${alias.profileId || "default"}`
+    : alias.apiKeyEnv
+      ? `env: ${alias.apiKeyEnv}`
+      : auth;
+  return `
+    <div class="model-row">
+      <strong>${escapeHtml(alias.alias)}</strong>
+      <span>${escapeHtml(alias.providerId)}</span>
+      <span>${escapeHtml(alias.model)}</span>
+      <span>${escapeHtml(credential)}</span>
+      <span>${alias.alias === defaultModel ? '<span class="pill">default</span>' : ""}</span>
+    </div>
+  `;
 }
 
 function renderProviders() {
@@ -425,14 +437,23 @@ function syncAliasModelSuggestions() {
 function syncAliasProviderDefaults() {
   const preset = providerPreset(document.querySelector("#alias-provider").value);
   if (!preset) return;
-  document.querySelector("#alias-auth-type").value = preset.auth || "api-key";
+  syncAliasAuthOptions();
   syncAliasModelSuggestions();
   syncAliasAuthFields();
 }
 
+function syncAliasAuthOptions() {
+  const providerId = document.querySelector("#alias-provider").value;
+  const options = authOptionsForProvider(providerId);
+  fillSelect("#alias-auth-type", options, options[0] || "api-key");
+}
+
 function syncAliasAuthFields() {
   const authType = document.querySelector("#alias-auth-type").value;
-  document.querySelector("#alias-api-key").disabled = authType !== "api-key";
+  const apiKeyRow = document.querySelector("#alias-api-key-row");
+  const apiKeyInput = document.querySelector("#alias-api-key");
+  apiKeyRow.hidden = authType !== "api-key";
+  apiKeyInput.disabled = authType !== "api-key";
   document.querySelector("#alias-profile-id").disabled = authType !== "oauth";
 }
 
@@ -445,6 +466,12 @@ function providerLabel(providerId) {
   return preset ? preset.name : providerId;
 }
 
+function authOptionsForProvider(providerId) {
+  const preset = providerPreset(providerId);
+  if (!preset || !preset.auth) return ["api-key"];
+  return [preset.auth];
+}
+
 function providerReadiness(preset, provider, configured) {
   if (!configured) {
     return { status: "available", detail: preset.auth === "oauth" ? "OAuth" : "API key" };
@@ -453,7 +480,11 @@ function providerReadiness(preset, provider, configured) {
 }
 
 function modelProviderStatus(preset) {
-  return `${preset.name} selected. Enter the exact model id you want agents to use.`;
+  const auth = authOptionsForProvider(preset.id)[0];
+  if (auth === "oauth") {
+    return `${preset.name} uses OAuth. Expose Model will save the alias and open the OAuth login.`;
+  }
+  return `${preset.name} uses an API key. Paste it here once and OCLite saves it to .oclite/.env.`;
 }
 
 function renderTelegram() {
@@ -676,10 +707,23 @@ wireForm("#bot-form", "/api/telegram/bots", (form) => {
 });
 wireForm("#allow-form", "/api/telegram/allow");
 wireForm("#bind-form", "/api/agents/bind");
-wireForm("#model-alias-form", "/api/models/alias", (form) => {
-  const data = formJson(form);
-  data.makeDefault = form.elements.makeDefault.checked;
-  return data;
+
+document.querySelector("#model-alias-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  try {
+    const data = formJson(form);
+    data.makeDefault = form.elements.makeDefault.checked;
+    const oauthWindow = data.authType === "oauth" ? window.open("about:blank", "_blank") : null;
+    await api("/api/models/alias", { method: "POST", body: JSON.stringify(data) });
+    if (data.authType === "oauth") {
+      await startProviderOAuth(data.providerId, data.profileId || "default", oauthWindow);
+    }
+    form.reset();
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
 });
 
 document.querySelector("#provider-auth-form").addEventListener("submit", async (event) => {
@@ -700,17 +744,27 @@ document.querySelector("#provider-auth-form").addEventListener("submit", async (
 document.querySelector("#oauth-start-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    const result = await api("/api/oauth/start", {
-      method: "POST",
-      body: JSON.stringify(formJson(event.currentTarget)),
-    });
-    document.querySelector("#oauth-output").textContent =
-      `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`;
-    window.open(result.authUrl, "_blank", "noopener,noreferrer");
+    const data = formJson(event.currentTarget);
+    await startProviderOAuth(data.providerId, data.profileId || "default");
   } catch (error) {
     document.querySelector("#oauth-output").textContent = error.message;
   }
 });
+
+async function startProviderOAuth(providerId, profileId = "default", targetWindow = null) {
+  const result = await api("/api/oauth/start", {
+    method: "POST",
+    body: JSON.stringify({ providerId, profileId }),
+  });
+  document.querySelector("#oauth-output").textContent =
+    `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`;
+  if (targetWindow) {
+    targetWindow.location.href = result.authUrl;
+  } else {
+    window.open(result.authUrl, "_blank", "noopener,noreferrer");
+  }
+  return result;
+}
 
 document.querySelector("#oauth-complete-form").addEventListener("submit", async (event) => {
   event.preventDefault();
