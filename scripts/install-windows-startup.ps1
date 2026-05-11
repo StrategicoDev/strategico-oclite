@@ -29,15 +29,7 @@ New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 $starterContent = @"
 `$ErrorActionPreference = "Stop"
 `$env:OCLITE_HOME = "$OCLiteHome"
-Set-Location "$SourceDir"
-`$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not `$python) {
-  `$python = Get-Command py -ErrorAction SilentlyContinue
-}
-if (-not `$python) {
-  throw "Python was not found on PATH."
-}
-& `$python.Source run.py run --host "$HostAddress" --port $Port *> "$log"
+& "$SourceDir\scripts\start-windows.ps1" -SourceDir "$SourceDir" -OCLiteHome "$OCLiteHome" -HostAddress "$HostAddress" -Port $Port *> "$log"
 "@
 
 Set-Content -Path $starter -Value $starterContent -Encoding UTF8

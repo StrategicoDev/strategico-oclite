@@ -1,5 +1,11 @@
 # OCLite Release Notes
 
+## 0.2.10 - 2026-05-11
+
+- Made Windows start scripts ignore the Microsoft Store Python alias unless it points to a real Python runtime.
+- Added automatic detection for repo virtualenv, Codex bundled Python, Python Launcher, python3, and python.
+- Updated the Windows startup scheduled task helper to reuse the same Python detection logic.
+
 ## 0.2.9 - 2026-05-11
 
 - Added a simple Windows start script for manually launching the gateway without installing startup-on-login.
