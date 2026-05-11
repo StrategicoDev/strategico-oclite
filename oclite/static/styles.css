@@ -646,6 +646,20 @@ button.secondary:hover {
   padding: 4px 10px;
 }
 
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+button.danger-button {
+  color: var(--warn);
+}
+
+button.danger-button:hover {
+  background: #fff7ed;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

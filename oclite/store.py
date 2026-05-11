@@ -572,6 +572,49 @@ class Store:
         self.save_config(config)
         return entry
 
+    def delete_model_alias(self, alias: str, replacement: str | None = None) -> dict[str, Any]:
+        alias = str(alias or "").strip()
+        if not alias:
+            raise ValueError("Model alias is required")
+        config = self.config()
+        models = config.setdefault("models", {})
+        aliases = models.setdefault("aliases", {})
+        if alias == "mock:echo":
+            raise ValueError("Cannot remove the built-in mock model")
+        if alias not in aliases:
+            raise ValueError(f"Unknown exposed model '{alias}'")
+        affected = [agent for agent in self.list_agents() if agent.model == alias]
+        if affected:
+            replacement = str(replacement or "").strip()
+            if not replacement:
+                raise ValueError("Replacement model is required because one or more agents use this model")
+            choices = [choice for choice in self.agent_model_choices() if choice != alias]
+            if replacement not in choices:
+                raise ValueError(f"Replacement model '{replacement}' is not available")
+            for agent in affected:
+                agent.model = replacement
+                self.save_agent(agent)
+            if models.get("default") == alias:
+                models["default"] = replacement
+        elif models.get("default") == alias:
+            fallback = self._first_model_except(alias)
+            models["default"] = fallback
+        del aliases[alias]
+        allowed = models.setdefault("allowed", [])
+        models["allowed"] = [model for model in allowed if model != alias]
+        self.save_config(config)
+        return {
+            "deleted": alias,
+            "replacement": replacement or models.get("default"),
+            "affectedAgents": [agent.id for agent in affected],
+        }
+
+    def _first_model_except(self, alias: str) -> str:
+        for choice in self.agent_model_choices():
+            if choice != alias:
+                return choice
+        return "mock:echo"
+
     def agent_model_choices(self) -> list[str]:
         config = self.config()
         choices = list(config.get("models", {}).get("allowed", []))

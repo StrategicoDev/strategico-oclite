@@ -260,7 +260,10 @@ function renderModelAliasRow(alias, defaultModel) {
         <span class="pill ${status.ok ? "ok" : "warn"}">${escapeHtml(status.label)}</span>
         ${alias.alias === defaultModel ? '<span class="pill">default</span>' : ""}
       </span>
-      <button class="secondary compact-button" data-model-test="${escapeHtml(alias.alias)}">Test</button>
+      <span class="row-actions">
+        <button class="secondary compact-button" data-model-test="${escapeHtml(alias.alias)}">Test</button>
+        ${alias.alias === "mock:echo" ? "" : `<button class="secondary compact-button danger-button" data-model-delete="${escapeHtml(alias.alias)}">Remove</button>`}
+      </span>
     </div>
   `;
 }
@@ -725,6 +728,11 @@ document.addEventListener("click", async (event) => {
     await testModelAlias(modelButton);
     return;
   }
+  const deleteButton = event.target.closest("[data-model-delete]");
+  if (deleteButton) {
+    await deleteModelAlias(deleteButton.dataset.modelDelete);
+    return;
+  }
   const row = event.target.closest("[data-task-select]");
   if (row) {
     selectedTaskId = row.dataset.taskSelect;
@@ -765,6 +773,52 @@ async function testModelAlias(button) {
   } finally {
     renderModels();
   }
+}
+
+async function deleteModelAlias(alias) {
+  const affectedAgents = (state.agents || []).filter((agent) => agent.model === alias);
+  const replacementChoices = agentModelChoices().filter((model) => model !== alias);
+  let replacement = "";
+  if (affectedAgents.length) {
+    if (!replacementChoices.length) {
+      alert("Cannot remove this model because agents use it and no replacement model is available.");
+      return;
+    }
+    replacement = await chooseReplacementModel(alias, affectedAgents, replacementChoices);
+    if (!replacement) return;
+  } else if (!confirm(`Remove exposed model '${alias}'?`)) {
+    return;
+  }
+  try {
+    await api("/api/models/delete", {
+      method: "POST",
+      body: JSON.stringify({ alias, replacement }),
+    });
+    delete modelAuthStatus[alias];
+    await refresh();
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function chooseReplacementModel(alias, affectedAgents, choices) {
+  const lines = affectedAgents.map((agent) => `- ${agent.name} (${agent.id})`).join("\n");
+  const choiceList = choices.map((choice, index) => `${index + 1}. ${choice}`).join("\n");
+  const answer = prompt(
+    `Remove '${alias}'?\n\nThese agents use it and need one replacement model:\n${lines}\n\nAvailable replacements:\n${choiceList}\n\nEnter the replacement number or exact model alias:`,
+    "1"
+  );
+  if (answer === null) return "";
+  const trimmed = answer.trim();
+  const number = Number(trimmed);
+  if (Number.isInteger(number) && number >= 1 && number <= choices.length) {
+    return choices[number - 1];
+  }
+  if (choices.includes(trimmed)) {
+    return trimmed;
+  }
+  alert("Replacement was not recognized. No changes were made.");
+  return "";
 }
 
 wireForm("#agent-form", "/api/agents");

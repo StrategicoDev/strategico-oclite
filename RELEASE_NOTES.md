@@ -1,5 +1,12 @@
 # OCLite Release Notes
 
+## 0.2.11 - 2026-05-11
+
+- Added Remove actions for exposed model aliases.
+- Added backend-safe model alias deletion.
+- If agents use a model being removed, OCLite now requires one replacement model and applies it to all affected agents.
+- Protected the built-in `mock:echo` model from deletion.
+
 ## 0.2.10 - 2026-05-11
 
 - Made Windows start scripts ignore the Microsoft Store Python alias unless it points to a real Python runtime.

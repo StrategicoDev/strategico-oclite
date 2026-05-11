@@ -94,6 +94,9 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/models/alias":
                 data = self.read_json()
                 return self.json_response(self.store.save_model_alias(data), 201)
+            if parsed.path == "/api/models/delete":
+                data = self.read_json()
+                return self.json_response(self.store.delete_model_alias(data.get("alias", ""), data.get("replacement")))
             if parsed.path == "/api/models/test":
                 return self.test_model()
             if parsed.path == "/api/providers":
