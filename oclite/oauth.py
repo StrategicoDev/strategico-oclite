@@ -22,6 +22,8 @@ OPENAI_CODEX_REDIRECT_URI = "http://localhost:1455/auth/callback"
 OPENAI_CODEX_SCOPE = "openid profile email offline_access"
 GITHUB_DEVICE_CODE_URL = "https://github.com/login/device/code"
 GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
+GITHUB_COPILOT_CLIENT_ID = "Iv1.b507a08c87ecfe98"
+GITHUB_COPILOT_DEVICE_SCOPE = "read:user"
 GITHUB_COPILOT_TOKEN_ENV = ("COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN")
 
 
@@ -75,6 +77,27 @@ class AuthStore:
     def get_profile(self, provider_id: str, profile_id: str = "default") -> dict[str, Any] | None:
         return self.load().get("profiles", {}).get(f"{provider_id}:{profile_id}")
 
+    def delete_profile(self, provider_id: str, profile_id: str = "default") -> None:
+        data = self.load()
+        profiles = data.setdefault("profiles", {})
+        key = f"{provider_id}:{profile_id}"
+        if key in profiles:
+            del profiles[key]
+            self.save(data)
+
+    def update_profile(self, provider_id: str, profile_id: str, updates: dict[str, Any]) -> dict[str, Any]:
+        data = self.load()
+        profiles = data.setdefault("profiles", {})
+        key = f"{provider_id}:{profile_id}"
+        profile = profiles.get(key)
+        if not profile:
+            raise OAuthError(f"OAuth profile '{key}' was not found")
+        profile.update(updates)
+        profile["updatedAt"] = int(time.time())
+        profiles[key] = profile
+        self.save(data)
+        return profile
+
     def list_profiles(self) -> list[dict[str, Any]]:
         return list(self.load().get("profiles", {}).values())
 
@@ -84,10 +107,13 @@ class AuthStore:
 
     def load_pending(self, state: str) -> dict[str, Any]:
         if not self.pending_path.exists():
-            raise OAuthError("No OAuth login is pending")
+            raise OAuthError("No OAuth login is pending. Start OAuth again from the active OCLite control UI.")
         pending = json.loads(self.pending_path.read_text(encoding="utf-8"))
         if pending.get("state") != state:
-            raise OAuthError("OAuth state mismatch")
+            raise OAuthError(
+                "OAuth state mismatch. This callback belongs to a different or older login attempt; "
+                "close this tab and start OAuth again from the active OCLite control UI."
+            )
         return pending
 
     def clear_pending(self) -> None:
@@ -128,21 +154,13 @@ def start_openai_codex_oauth(home: Path, profile_id: str = "default") -> dict[st
 
 
 def start_github_copilot_oauth(home: Path, profile_id: str = "default") -> dict[str, Any]:
-    imported = import_github_copilot_token(home, profile_id)
-    if imported:
-        return {
-            "providerId": "copilot",
-            "profileId": profile_id or "default",
-            "status": "complete",
-            "message": imported["message"],
-        }
-    client_id = os.environ.get("OCLITE_GITHUB_OAUTH_CLIENT_ID", "").strip()
-    if not client_id:
-        raise OAuthError(
-            "GitHub Copilot OAuth needs either COPILOT_GITHUB_TOKEN/GH_TOKEN/GITHUB_TOKEN, "
-            "a GitHub CLI login, or OCLITE_GITHUB_OAUTH_CLIENT_ID for device login."
-        )
-    body = urllib.parse.urlencode({"client_id": client_id}).encode("utf-8")
+    auth_store = AuthStore(home)
+    profile_id = profile_id or "default"
+    existing = auth_store.get_profile("copilot", profile_id)
+    if existing and existing.get("accountId") != "github device login":
+        auth_store.delete_profile("copilot", profile_id)
+    client_id = os.environ.get("OCLITE_GITHUB_OAUTH_CLIENT_ID", "").strip() or GITHUB_COPILOT_CLIENT_ID
+    body = urllib.parse.urlencode({"client_id": client_id, "scope": GITHUB_COPILOT_DEVICE_SCOPE}).encode("utf-8")
     request = urllib.request.Request(
         GITHUB_DEVICE_CODE_URL,
         data=body,
@@ -157,13 +175,15 @@ def start_github_copilot_oauth(home: Path, profile_id: str = "default") -> dict[
     if data.get("error"):
         raise OAuthError(f"GitHub device login failed: {data.get('error_description') or data['error']}")
     state = secrets.token_urlsafe(24)
-    AuthStore(home).save_pending(
+    auth_store.save_pending(
         {
             "providerId": "copilot",
-            "profileId": profile_id or "default",
+            "profileId": profile_id,
             "state": state,
             "clientId": client_id,
             "deviceCode": data["device_code"],
+            "userCode": data["user_code"],
+            "verificationUri": data["verification_uri"],
             "interval": int(data.get("interval", 5)),
             "expiresAt": int(time.time()) + int(data.get("expires_in", 900)),
             "createdAt": int(time.time()),
@@ -171,7 +191,7 @@ def start_github_copilot_oauth(home: Path, profile_id: str = "default") -> dict[
     )
     return {
         "providerId": "copilot",
-        "profileId": profile_id or "default",
+        "profileId": profile_id,
         "status": "pending",
         "authUrl": data["verification_uri"],
         "verificationUri": data["verification_uri"],
@@ -359,8 +379,11 @@ def ensure_callback_server(home: Path) -> None:
 
     try:
         server = ThreadingHTTPServer(("127.0.0.1", 1455), CallbackHandler)
-    except OSError:
-        return
+    except OSError as exc:
+        raise OAuthError(
+            "OAuth callback port 1455 is already in use. Stop the other OCLite/Python gateway process "
+            "or use the control UI served by that process, then start OAuth again."
+        ) from exc
     thread = threading.Thread(target=server.serve_forever, name="oauth-callback", daemon=True)
     thread.start()
     _callback_server_started = True

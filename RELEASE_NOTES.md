@@ -1,5 +1,24 @@
 # OCLite Release Notes
 
+## 0.2.14 - 2026-05-11
+
+- Added a runnable GitHub Copilot chat adapter.
+- GitHub device-login profiles now exchange for short-lived Copilot session tokens and cache them.
+- Copilot aliases can be exposed and assigned to agents from the normal Models workflow.
+- Provider/model tests now verify Copilot by listing models through the Copilot API.
+- Fixed Copilot OAuth/token import leaving a blank pre-opened browser tab behind.
+- OpenAI Codex OAuth now reports when callback port 1455 is already owned by another process instead of silently sending the browser to a stale callback server.
+- OAuth callback errors now explain stale/mismatched login attempts more clearly.
+- Added a front-end Provider Setup flow so GitHub Copilot can be enabled with the required device-login profile before exposing models.
+- Copilot model exposure is now blocked until the Copilot OAuth profile exists.
+- Added GitHub Copilot login help for the device-code flow.
+- Removed per-alias auth controls from Expose Model; aliases now inherit auth from Provider Setup.
+- Removed automatic page polling and added a manual refresh button to the Tasks page.
+- Added Load Models in Expose Model to fetch valid model ids from the selected provider.
+- Copilot model tests now fail with available model suggestions when the alias model id is not valid.
+- Copilot provider readiness now distinguishes a stored token from a validated Copilot session token.
+- Switched Copilot setup from PAT-first auth to the GitHub Copilot Plugin device login flow and the `api.individual.githubcopilot.com` runtime host.
+
 ## 0.2.12 - 2026-05-11
 
 - Added a GitHub Copilot OAuth/token import route.

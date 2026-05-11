@@ -84,6 +84,31 @@ body {
   white-space: pre-wrap;
 }
 
+.help-content {
+  display: grid;
+  gap: 12px;
+  color: var(--ink);
+}
+
+.help-content ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  min-height: 38px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: var(--accent);
+  color: #ffffff;
+  text-decoration: none;
+}
+
 h1,
 h2,
 p {
@@ -209,10 +234,8 @@ strong {
   grid-template-columns:
     minmax(180px, 0.8fr)
     minmax(240px, 1fr)
-    minmax(220px, 1fr)
-    minmax(120px, 0.4fr)
-    minmax(220px, 0.9fr)
     auto
+    minmax(220px, 1fr)
     auto;
   gap: 10px;
   align-items: end;
@@ -288,7 +311,7 @@ strong {
 
 .provider-add-row {
   display: grid;
-  grid-template-columns: minmax(220px, 0.5fr) minmax(320px, 1fr) auto;
+  grid-template-columns: minmax(220px, 0.5fr) minmax(320px, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 0;

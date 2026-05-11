@@ -35,6 +35,27 @@
       <pre id="release-notes"></pre>
     </dialog>
 
+    <dialog id="copilot-token-dialog" class="release-dialog">
+      <header>
+        <div>
+          <h2>GitHub Copilot Login</h2>
+          <small>Device login links the Copilot provider</small>
+        </div>
+        <button id="close-copilot-token-dialog" class="secondary" type="button">Close</button>
+      </header>
+      <div class="help-content">
+        <p>Use GitHub device login with the GitHub account that has Copilot enabled.</p>
+        <ol>
+          <li>Select GitHub Copilot in Provider Setup.</li>
+          <li>Click Enable Provider.</li>
+          <li>Approve the device code in the GitHub browser page.</li>
+          <li>Return to OCLite and load the provider models.</li>
+        </ol>
+        <p>Personal access tokens usually cannot access the Copilot token exchange. OCLite stores the GitHub device access token locally, then requests short-lived Copilot runtime tokens when models run.</p>
+        <a class="button-link" href="https://github.com/login/device" target="_blank" rel="noopener noreferrer">Open GitHub Device Login</a>
+      </div>
+    </dialog>
+
     <main>
       <nav class="tabs" aria-label="OCLite sections">
         <button class="tab active" data-view-target="dashboard">Dashboard</button>
@@ -218,6 +239,17 @@
 
       <section class="view" data-view="models">
         <div class="grid model-setup">
+          <article class="wide provider-panel compact-section">
+            <h2>Provider Setup</h2>
+            <form id="provider-setup-form" class="provider-add-row">
+              <select name="providerId" id="setup-provider"></select>
+              <input name="apiKey" id="setup-api-key" placeholder="provider credential" />
+              <button class="secondary compact-button" id="copilot-token-help" type="button">Help</button>
+              <button>Enable Provider</button>
+            </form>
+            <small id="provider-setup-status">Choose a provider and complete its required authentication.</small>
+          </article>
+
           <article class="wide expose-model-panel">
             <h2>Expose Model</h2>
             <form id="model-alias-form" class="expose-model-form">
@@ -230,20 +262,11 @@
                 <input name="model" id="alias-model-input" list="model-options" placeholder="model id, e.g. gpt-5.5" />
                 <datalist id="model-options"></datalist>
               </label>
+              <button class="secondary compact-button" id="load-provider-models" type="button">Load Models</button>
               <label>
                 <span class="field-label">Agent Alias</span>
                 <input name="alias" placeholder="alias agents use, optional" />
               </label>
-              <label>
-                <span class="field-label">Auth</span>
-                <select name="authType" id="alias-auth-type">
-                </select>
-              </label>
-              <label id="alias-api-key-row">
-                <span class="field-label">API Key</span>
-                <input name="apiKey" id="alias-api-key" placeholder="optional, saved to .oclite/.env" />
-              </label>
-              <input name="profileId" id="alias-profile-id" type="hidden" value="default" />
               <label class="check"><input name="makeDefault" type="checkbox" /> default</label>
               <button>Expose Model</button>
             </form>
@@ -257,27 +280,12 @@
 
           <details class="wide provider-actions advanced-panel">
             <summary>Auth diagnostics</summary>
-            <small id="oauth-help">OAuth connect is only shown for providers with a supported OAuth adapter.</small>
-            <form id="oauth-start-form" class="inline-form">
-              <select name="providerId" id="oauth-provider"></select>
-              <input name="profileId" type="hidden" value="default" />
-              <button>Connect OAuth</button>
-            </form>
             <form id="provider-auth-form" class="inline-form">
               <select name="providerId" id="auth-provider"></select>
               <span></span>
               <button>Test Auth</button>
             </form>
             <pre id="provider-auth-output"></pre>
-            <pre id="oauth-output"></pre>
-            <details class="advanced">
-              <summary>Manual OAuth callback</summary>
-              <form id="oauth-complete-form" class="stack">
-                <input name="code" placeholder="callback code" />
-                <input name="state" placeholder="callback state" />
-                <button>Complete OAuth Manually</button>
-              </form>
-            </details>
             <div id="auth-profiles" class="list"></div>
           </details>
 
@@ -298,7 +306,8 @@
                 <label class="field-label" for="task-limit">Show tasks</label>
                 <input id="task-limit" type="number" min="1" max="500" step="1" />
                 <small id="task-limit-status">Showing tasks</small>
-                <small id="live-status">Live refresh starting</small>
+                <button class="secondary compact-button" id="tasks-refresh" type="button">Refresh</button>
+                <small id="live-status">Refresh when needed</small>
               </div>
             </div>
             <div class="task-workbench">

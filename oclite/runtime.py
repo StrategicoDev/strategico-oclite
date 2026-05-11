@@ -161,8 +161,22 @@ class AgentRuntime:
 
     def _handle_runtime_command(self, agent: Agent, message: str, session_id: str) -> str | None:
         command = self._command_name(message)
+        args = self._command_args(message)
+        if command == "/model" and args in {"live", "verify", "actual"}:
+            return self._live_model_command_response(agent, session_id)
         if command == "/model":
             return self._model_command_response(agent, session_id)
+        if command in {
+            "/livemodel",
+            "/live_model",
+            "/model_live",
+            "/verify_model",
+            "/actual_model",
+            "/live-model",
+            "/model-live",
+            "/verify-model",
+        }:
+            return self._live_model_command_response(agent, session_id)
         return None
 
     def _command_name(self, message: str) -> str:
@@ -171,6 +185,10 @@ class AgentRuntime:
             return ""
         first = text.split()[0].lower()
         return first.split("@", 1)[0]
+
+    def _command_args(self, message: str) -> str:
+        parts = str(message or "").strip().split(maxsplit=1)
+        return parts[1].strip().lower() if len(parts) > 1 else ""
 
     def _model_command_response(self, agent: Agent, session_id: str) -> str:
         config = self.store.config()
@@ -194,6 +212,37 @@ class AgentRuntime:
             f"Model: {diagnostics.get('model', agent.model)}\n"
             f"Auth: {auth_label}"
         )
+
+    def _live_model_command_response(self, agent: Agent, session_id: str) -> str:
+        try:
+            result = ProviderRunner(self.store.config(), self.store.home).live_model_probe(agent.model)
+        except ProviderError as exc:
+            return f"Live model probe failed\nAgent: {agent.name} ({agent.id})\nSession: {session_id}\nError: {exc}"
+        requested = result.get("requestedModel") or result.get("model", agent.model)
+        actual = result.get("actualModel") or "not reported"
+        status = self._live_model_status(str(requested), str(actual))
+        return (
+            "Live model probe\n"
+            f"Agent: {agent.name} ({agent.id})\n"
+            f"Session: {session_id}\n"
+            f"Alias: {agent.model}\n"
+            f"Provider: {result.get('provider', 'unknown')}\n"
+            f"Registry model: {requested}\n"
+            f"Provider-reported model: {actual}\n"
+            f"Status: {status}\n"
+            f"Endpoint: {result.get('endpoint', 'unknown')}\n"
+            f"Probe reply: {result.get('responsePreview', '').strip() or '(empty)'}"
+        )
+
+    def _live_model_status(self, requested: str, actual: str) -> str:
+        if actual == "not reported" or actual.startswith("not reported"):
+            return "provider did not report model"
+        if actual == requested:
+            return "matches"
+        normalize = lambda value: value.lower().replace(".", "-").replace("_", "-")
+        if normalize(actual) == normalize(requested):
+            return "matches after provider canonicalization"
+        return "differs"
 
     def _format_recent_events(self, events: list[dict[str, Any]]) -> str:
         lines: list[str] = []

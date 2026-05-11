@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import subprocess
@@ -369,11 +370,7 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
 
     def json_response(self, data, status: int = 200) -> None:
         body = json.dumps(data, indent=2).encode("utf-8")
-        self.send_response(status)
-        self.send_header("content-type", "application/json")
-        self.send_header("content-length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        self.write_response(status, "application/json", body)
 
     def serve_static(self, request_path: str) -> None:
         path = "index.html" if request_path in ("", "/") else request_path.lstrip("/")
@@ -388,11 +385,26 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
         }
         content_type = content_types.get(target.suffix, "application/octet-stream")
         body = target.read_bytes()
-        self.send_response(200)
-        self.send_header("content-type", content_type)
-        self.send_header("content-length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        self.write_response(200, content_type, body)
+
+    def write_response(self, status: int, content_type: str, body: bytes) -> None:
+        try:
+            self.send_response(status)
+            self.send_header("content-type", content_type)
+            self.send_header("content-length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+        except OSError as exc:
+            if self.is_client_disconnect(exc):
+                return
+            raise
+
+    def is_client_disconnect(self, exc: OSError) -> bool:
+        return (
+            isinstance(exc, (BrokenPipeError, ConnectionAbortedError, ConnectionResetError))
+            or getattr(exc, "winerror", None) in {10053, 10054}
+            or getattr(exc, "errno", None) in {errno.EPIPE, errno.ECONNABORTED, errno.ECONNRESET}
+        )
 
 
 def run_server(host: str, port: int, poll_telegram: bool = True) -> None:

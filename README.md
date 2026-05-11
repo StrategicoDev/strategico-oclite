@@ -231,6 +231,15 @@ For `openai-codex/*`, OCLite also supports the OpenAI Codex/ChatGPT subscription
 
 In the UI, use Providers -> Start OAuth with provider `openai-codex` and profile `default`. After the browser callback completes, set provider `openai-codex` to profile `default`, then assign an `openai-codex/...` model to the agent.
 
+For `copilot/*`, OCLite supports GitHub Copilot authentication and chat execution:
+
+- GitHub device login with the official Copilot Plugin app
+- exchange the GitHub device access token for a short-lived Copilot session token
+- route model calls to `https://api.individual.githubcopilot.com/responses` or `/messages`, matching the model family
+- cache the Copilot session token until it expires
+
+In the UI, use Models -> Provider Setup to enable GitHub Copilot first. Approve the GitHub device code with the account that has an active Copilot subscription. After the provider validates and lists models, expose a `copilot/...` model such as `copilot/claude-opus-4.7` and assign the alias to an agent.
+
 The control UI can:
 
 - allow models

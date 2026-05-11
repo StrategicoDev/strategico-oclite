@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import Agent, SessionMeta, TaskRecord, ensure_openclaw_workspace, new_id, utc_now
+from .oauth import AuthStore
 
 
 DEFAULT_ALLOWED_MODELS = ["mock:echo"]
@@ -21,6 +22,14 @@ DEFAULT_PROVIDERS = {
         "apiKeyEnv": "OPENAI_API_KEY",
         "baseUrl": "https://api.openai.com/v1",
         "codexBaseUrl": "https://chatgpt.com/backend-api/codex",
+        "maxOutputTokens": 1200,
+        "timeoutSeconds": 120,
+    },
+    "copilot": {
+        "apiKeyEnv": "COPILOT_GITHUB_TOKEN",
+        "baseUrl": "https://api.individual.githubcopilot.com",
+        "authType": "oauth",
+        "adapter": "copilot-chat",
         "maxOutputTokens": 1200,
         "timeoutSeconds": 120,
     },
@@ -67,8 +76,9 @@ PROVIDER_PRESETS = {
     "bedrock": {"name": "AWS Bedrock", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},
     "copilot": {
         "name": "GitHub Copilot",
-        "baseUrl": "",
+        "baseUrl": "https://api.individual.githubcopilot.com",
         "auth": "oauth",
+        "exposeSupported": True,
         "oauthSupported": True,
         "description": "GitHub Copilot subscription access through GitHub authentication.",
     },
@@ -109,11 +119,18 @@ MODEL_PRESETS = [
     "alibaba/qwen3-coder-plus",
     "nvidia/deepseek-ai/deepseek-v3.2",
     "bedrock/us.anthropic.claude-sonnet-4-6",
+    "copilot/claude-opus-4.7",
+    "copilot/claude-opus-4.6",
+    "copilot/claude-sonnet-4.6",
+    "copilot/claude-haiku-4.5",
+    "copilot/gpt-5.3-codex",
     "copilot/gpt-5.4",
     "copilot/gpt-5.4-mini",
-    "copilot/gpt-5.3-codex",
-    "copilot/claude-sonnet-4.6",
-    "copilot/gemini-3.1-pro-preview",
+    "copilot/gpt-5.4-nano",
+    "copilot/gpt-5.2",
+    "copilot/gpt-5.2-codex",
+    "copilot/gemini-3.1-pro",
+    "copilot/gemini-3-flash",
     "copilot/grok-code-fast-1",
     "copilot-acp/copilot-acp",
     "opencode-zen/gpt-5.4-pro",
@@ -270,6 +287,9 @@ class Store:
                         if key not in config["providers"][provider]:
                             config["providers"][provider][key] = value
                             changed = True
+                    if provider == "copilot" and config["providers"][provider].get("baseUrl") == "https://api.githubcopilot.com":
+                        config["providers"][provider]["baseUrl"] = defaults["baseUrl"]
+                        changed = True
         return changed
 
     def load_env(self) -> None:
@@ -494,8 +514,10 @@ class Store:
         providers = config.setdefault("providers", {})
         existing = providers.get(provider_id, {})
         preset = PROVIDER_PRESETS.get(provider_id, {})
-        api_key_env = data.get("apiKeyEnv") or existing.get("apiKeyEnv") or self._env_key_for_provider(provider_id)
+        api_key_env = data.get("apiKeyEnv") or self._env_key_for_provider(provider_id) or existing.get("apiKeyEnv")
         base_url = data.get("baseUrl") or existing.get("baseUrl") or preset.get("baseUrl", "")
+        if provider_id == "copilot" and base_url == "https://api.githubcopilot.com":
+            base_url = preset.get("baseUrl", "https://api.individual.githubcopilot.com")
         updated = {
             **existing,
             "apiKeyEnv": api_key_env,
@@ -547,14 +569,23 @@ class Store:
             provider_id, model = model.split("/", 1)
         provider_id = self._canonical_provider_id(provider_id)
         alias = data.get("alias", "").strip() or self._default_alias(provider_id, model)
-        auth_type = data.get("authType", "api-key").strip() or "api-key"
         if not provider_id:
             raise ValueError("Provider is required")
         if not model:
             raise ValueError("Model is required")
         self._require_exposable_provider(provider_id)
+        config = self.config()
+        provider_config = config.get("providers", {}).get(provider_id, {})
+        preset = PROVIDER_PRESETS.get(provider_id, {})
+        auth_type = (data.get("authType") or provider_config.get("authType") or preset.get("auth") or "api-key").strip()
+        if auth_type == "oauth":
+            profile_id = data.get("profileId") or provider_config.get("profileId") or "default"
+            if not AuthStore(self.home).get_profile(provider_id, profile_id):
+                provider_name = preset.get("name", provider_id)
+                raise ValueError(f"Enable {provider_name} in Provider Setup before exposing models")
         self.save_model({"providerId": provider_id, "model": model})
         config = self.config()
+        provider_config = config.get("providers", {}).get(provider_id, {})
         entry = {
             "alias": alias,
             "providerId": provider_id,
@@ -562,9 +593,9 @@ class Store:
             "authType": auth_type,
         }
         if auth_type == "oauth":
-            entry["profileId"] = data.get("profileId") or config.get("providers", {}).get(provider_id, {}).get("profileId") or "default"
+            entry["profileId"] = data.get("profileId") or provider_config.get("profileId") or "default"
         elif auth_type == "api-key":
-            api_key_env = data.get("apiKeyEnv") or self._env_key_for_alias(alias)
+            api_key_env = data.get("apiKeyEnv") or provider_config.get("apiKeyEnv") or self._env_key_for_provider(provider_id)
             entry["apiKeyEnv"] = api_key_env
             if data.get("apiKey"):
                 self.write_env_value(api_key_env, data["apiKey"])
@@ -668,6 +699,8 @@ class Store:
     def _default_adapter(self, provider_id: str, base_url: str) -> str:
         if provider_id == "openai-codex":
             return "codex-oauth"
+        if provider_id == "copilot":
+            return "copilot-chat"
         if provider_id == "mock":
             return "mock"
         if base_url:
@@ -696,6 +729,8 @@ class Store:
         return f"OCLITE_{clean}_API_KEY"
 
     def _env_key_for_provider(self, provider_id: str) -> str:
+        if provider_id == "copilot":
+            return "COPILOT_GITHUB_TOKEN"
         clean = "".join(ch if ch.isalnum() else "_" for ch in provider_id.upper()).strip("_")
         return f"{clean}_API_KEY"
 

@@ -6,6 +6,7 @@ let refreshInFlight = false;
 let lastRefreshAt = null;
 let taskLimit = normalizeTaskLimit(localStorage.getItem("ocliteTaskLimit") || 25);
 let modelAuthStatus = {};
+let providerModelOptions = {};
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -237,9 +238,7 @@ function renderModels() {
   fillSelect("#agent-model", agentModels, defaultModel);
   fillSelect("#set-agent-model", agentModels, defaultModel);
   fillSelect("#alias-provider", providerIds, preferredSelectValue("#alias-provider", providerIds, "openai-codex"));
-  syncAliasAuthOptions();
   syncAliasModelSuggestions();
-  syncAliasAuthFields();
 }
 
 function renderModelAliasRow(alias, defaultModel) {
@@ -287,6 +286,9 @@ function modelStatusForAlias(alias) {
 function renderProviders() {
   const providers = state.config.providers || {};
   const presets = exposableProviderPresets();
+  const setupIds = presets.filter((preset) => preset.id !== "mock").map((preset) => preset.id);
+  fillSelect("#setup-provider", setupIds, preferredSelectValue("#setup-provider", setupIds, "copilot"));
+  syncProviderSetupFields();
   document.querySelector("#providers").innerHTML =
     presets
       .map((preset) => {
@@ -300,19 +302,16 @@ function renderProviders() {
               <small>${escapeHtml(preset.id)} · ${escapeHtml(preset.description || "")}</small>
             </div>
             <small>${escapeHtml(readiness.detail)}</small>
-            <span class="pill">${escapeHtml(readiness.status)}</span>
+            <span class="row-actions">
+              <span class="pill ${readiness.ok ? "ok" : "warn"}">${escapeHtml(readiness.status)}</span>
+              ${preset.id === "mock" ? "" : `<button class="secondary compact-button" data-provider-setup="${escapeHtml(preset.id)}">Setup</button>`}
+            </span>
           </div>
         `;
       })
       .join("");
   const providerIds = sortedConfiguredProviderIds();
-  const oauthIds = supportedOAuthProviderIds();
   fillSelect("#auth-provider", providerIds, preferredSelectValue("#auth-provider", providerIds, "openai-codex"));
-  fillSelect("#oauth-provider", oauthIds, preferredSelectValue("#oauth-provider", oauthIds, "openai-codex"));
-  document.querySelector("#oauth-start-form button").disabled = oauthIds.length === 0;
-  document.querySelector("#oauth-help").textContent = oauthIds.length
-    ? `OAuth connect is currently supported for: ${oauthIds.map(providerLabel).join(", ")}.`
-    : "No configured provider has a supported OAuth adapter yet.";
   renderAuthProfiles();
 }
 
@@ -410,12 +409,6 @@ function sortedConfiguredProviderIds() {
     .sort((a, b) => providerLabel(a).localeCompare(providerLabel(b)));
 }
 
-function supportedOAuthProviderIds() {
-  return sortedProviderPresets()
-    .filter((preset) => preset.oauthSupported)
-    .map((preset) => preset.id);
-}
-
 function exposableProviderPresets() {
   return sortedProviderPresets().filter((preset) => preset.exposeSupported);
 }
@@ -443,6 +436,7 @@ function syncAliasModelSuggestions() {
   catalog
     .filter((entry) => entry.providerId === providerId)
     .forEach((entry) => values.add(entry.model));
+  (providerModelOptions[providerId] || []).forEach((model) => values.add(model));
   (state.modelPresets || []).forEach((ref) => {
     if (!ref.includes("/")) return;
     const [presetProvider, presetModel] = ref.split("/", 2);
@@ -461,24 +455,7 @@ function syncAliasModelSuggestions() {
 function syncAliasProviderDefaults() {
   const preset = providerPreset(document.querySelector("#alias-provider").value);
   if (!preset) return;
-  syncAliasAuthOptions();
   syncAliasModelSuggestions();
-  syncAliasAuthFields();
-}
-
-function syncAliasAuthOptions() {
-  const providerId = document.querySelector("#alias-provider").value;
-  const options = authOptionsForProvider(providerId);
-  fillSelect("#alias-auth-type", options, options[0] || "api-key");
-}
-
-function syncAliasAuthFields() {
-  const authType = document.querySelector("#alias-auth-type").value;
-  const apiKeyRow = document.querySelector("#alias-api-key-row");
-  const apiKeyInput = document.querySelector("#alias-api-key");
-  apiKeyRow.hidden = authType !== "api-key";
-  apiKeyInput.disabled = authType !== "api-key";
-  document.querySelector("#alias-profile-id").disabled = authType !== "oauth";
 }
 
 function providerPreset(providerId) {
@@ -498,17 +475,77 @@ function authOptionsForProvider(providerId) {
 
 function providerReadiness(preset, provider, configured) {
   if (!configured) {
-    return { status: "available", detail: preset.auth === "oauth" ? "OAuth" : "API key" };
+    return { ok: false, status: "available", detail: preset.auth === "oauth" ? "OAuth required" : "API key required" };
   }
-  return { status: "ready", detail: provider.baseUrl || preset.baseUrl || preset.auth };
+  if (preset.id === "mock") {
+    return { ok: true, status: "ready", detail: "local" };
+  }
+  if (preset.auth === "oauth") {
+    const profileId = (provider && provider.profileId) || "default";
+    const profile = authProfile(preset.id, profileId);
+    if (preset.id === "copilot" && profile && (!profile.copilotAccess || Number(profile.copilotExpires || 0) <= Date.now() / 1000)) {
+      return { ok: false, status: "needs validation", detail: "Load models to validate token" };
+    }
+    const linked = Boolean(profile);
+    if (linked) {
+      return { ok: true, status: "linked", detail: `OAuth profile: ${profileId}` };
+    }
+    return { ok: false, status: "needs auth", detail: preset.id === "copilot" ? "GitHub device login" : "OAuth not linked" };
+  }
+  const envName = (provider && provider.apiKeyEnv) || defaultProviderEnv(preset.id);
+  return { ok: true, status: "linked", detail: provider.baseUrl || envName };
 }
 
 function modelProviderStatus(preset) {
   const auth = authOptionsForProvider(preset.id)[0];
   if (auth === "oauth") {
-    return `${preset.name} uses OAuth. Expose Model will save the alias and open the OAuth login.`;
+    const ready = providerReadiness(preset, (state.config.providers || {})[preset.id], Boolean((state.config.providers || {})[preset.id]));
+    if (!ready.ok) {
+      return `${preset.name} needs provider setup before agents can use exposed aliases.`;
+    }
+    return `${preset.name} is linked. Expose Model will save the alias for agents.`;
   }
-  return `${preset.name} uses an API key. Paste it here once and OCLite saves it to .oclite/.env.`;
+  return `${preset.name} is linked. Expose Model will save the alias for agents.`;
+}
+
+function hasAuthProfile(providerId, profileId = "default") {
+  return Boolean(authProfile(providerId, profileId));
+}
+
+function authProfile(providerId, profileId = "default") {
+  return (state.authProfiles || []).find(
+    (profile) => profile.providerId === providerId && profile.profileId === profileId
+  );
+}
+
+function defaultProviderEnv(providerId) {
+  if (providerId === "copilot") return "COPILOT_GITHUB_TOKEN";
+  if (providerId === "openai") return "OPENAI_API_KEY";
+  if (providerId === "openai-codex") return "OPENAI_API_KEY";
+  return `${providerId.toUpperCase().replaceAll("-", "_")}_API_KEY`;
+}
+
+function syncProviderSetupFields() {
+  const providerId = document.querySelector("#setup-provider").value;
+  const preset = providerPreset(providerId);
+  const keyInput = document.querySelector("#setup-api-key");
+  if (!preset) return;
+  keyInput.hidden = false;
+  keyInput.disabled = false;
+  keyInput.value = "";
+  if (providerId === "copilot") {
+    keyInput.hidden = true;
+    keyInput.disabled = true;
+    document.querySelector("#provider-setup-status").textContent =
+      "GitHub Copilot uses GitHub device login with the official Copilot plugin app.";
+  } else if (preset.auth === "oauth") {
+    keyInput.hidden = true;
+    keyInput.disabled = true;
+    document.querySelector("#provider-setup-status").textContent = `${preset.name} will open its OAuth flow.`;
+  } else {
+    keyInput.placeholder = `${defaultProviderEnv(providerId)} value`;
+    document.querySelector("#provider-setup-status").textContent = `${preset.name} needs an API key saved to .oclite/.env.`;
+  }
 }
 
 function renderTelegram() {
@@ -620,6 +657,7 @@ function wireForm(selector, path, transform) {
 }
 
 document.querySelector("#refresh").addEventListener("click", () => refresh().catch((error) => alert(error.message)));
+document.querySelector("#tasks-refresh").addEventListener("click", () => refresh().catch((error) => alert(error.message)));
 document.querySelector("#version-badge").addEventListener("click", () => {
   const dialog = document.querySelector("#release-dialog");
   if (dialog.showModal) {
@@ -630,6 +668,17 @@ document.querySelector("#version-badge").addEventListener("click", () => {
 });
 document.querySelector("#close-release-dialog").addEventListener("click", () => {
   document.querySelector("#release-dialog").close();
+});
+document.querySelector("#copilot-token-help").addEventListener("click", () => {
+  const dialog = document.querySelector("#copilot-token-dialog");
+  if (dialog.showModal) {
+    dialog.showModal();
+  } else {
+    window.open("https://github.com/settings/tokens", "_blank", "noopener,noreferrer");
+  }
+});
+document.querySelector("#close-copilot-token-dialog").addEventListener("click", () => {
+  document.querySelector("#copilot-token-dialog").close();
 });
 document.querySelector("#update-gateway").addEventListener("click", async () => {
   const button = document.querySelector("#update-gateway");
@@ -719,9 +768,19 @@ document.querySelector("#task-limit").addEventListener("change", (event) => {
   localStorage.setItem("ocliteTaskLimit", String(taskLimit));
   renderTasks();
 });
+document.querySelector("#setup-provider").addEventListener("change", syncProviderSetupFields);
 document.querySelector("#alias-provider").addEventListener("change", syncAliasProviderDefaults);
-document.querySelector("#alias-auth-type").addEventListener("change", syncAliasAuthFields);
+document.querySelector("#load-provider-models").addEventListener("click", async (event) => {
+  await loadProviderModels(document.querySelector("#alias-provider").value, event.currentTarget);
+});
 document.addEventListener("click", async (event) => {
+  const setupButton = event.target.closest("[data-provider-setup]");
+  if (setupButton) {
+    document.querySelector("#setup-provider").value = setupButton.dataset.providerSetup;
+    syncProviderSetupFields();
+    document.querySelector("#setup-api-key").focus();
+    return;
+  }
   const modelButton = event.target.closest("[data-model-test]");
   if (modelButton) {
     await testModelAlias(modelButton);
@@ -771,6 +830,36 @@ async function testModelAlias(button) {
     modelAuthStatus[alias] = { ok: false, label: "failed", message: error.message };
   } finally {
     renderModels();
+  }
+}
+
+async function loadProviderModels(providerId, button = null) {
+  const status = document.querySelector("#model-provider-status");
+  const originalText = button ? button.textContent : "";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Loading...";
+  }
+  try {
+    const result = await api("/api/providers/auth", {
+      method: "POST",
+      body: JSON.stringify({ providerId }),
+    });
+    providerModelOptions[providerId] = result.models || [];
+    syncAliasModelSuggestions();
+    const count = providerModelOptions[providerId].length;
+    status.textContent = count
+      ? `${providerLabel(providerId)} returned ${count} available models. Choose one from the Model field.`
+      : `${providerLabel(providerId)} did not return a model list; use a known model id.`;
+    return result;
+  } catch (error) {
+    status.textContent = error.message;
+    throw error;
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
   }
 }
 
@@ -851,16 +940,62 @@ wireForm("#bot-form", "/api/telegram/bots", (form) => {
 wireForm("#allow-form", "/api/telegram/allow");
 wireForm("#bind-form", "/api/agents/bind");
 
+document.querySelector("#provider-setup-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const status = document.querySelector("#provider-setup-status");
+  const data = formJson(form);
+  const preset = providerPreset(data.providerId);
+  let oauthWindow = null;
+  try {
+    if (!preset) throw new Error("Choose a supported provider.");
+    if (preset.auth === "oauth") {
+      if (data.providerId === "copilot") {
+        alert("OCLite will copy the GitHub device code to your clipboard, then open the GitHub authorization tab.");
+      }
+      oauthWindow = window.open("about:blank", "_blank");
+      if (!oauthWindow) {
+        status.textContent = "Browser blocked the authorization tab. Allow popups for this OCLite page and try again.";
+        return;
+      }
+    }
+    const payload = { providerId: data.providerId };
+    if (data.providerId === "copilot") payload.baseUrl = "https://api.individual.githubcopilot.com";
+    if (data.apiKey) payload.apiKey = data.apiKey;
+    status.textContent = `Saving ${providerLabel(data.providerId)}...`;
+    await api("/api/providers", { method: "POST", body: JSON.stringify(payload) });
+    if (preset.auth === "oauth") {
+      status.textContent = `Linking ${providerLabel(data.providerId)}...`;
+      await startProviderOAuth(data.providerId, "default", oauthWindow);
+    } else {
+      const result = await api("/api/providers/auth", {
+        method: "POST",
+        body: JSON.stringify({ providerId: data.providerId }),
+      });
+      providerModelOptions[data.providerId] = result.models || [];
+      status.textContent = result.ok ? `${providerLabel(data.providerId)} is configured.` : result.message || "Provider saved.";
+    }
+    form.reset();
+    await refresh();
+  } catch (error) {
+    closeOAuthWindow(oauthWindow);
+    status.textContent = error.message;
+  }
+});
+
 document.querySelector("#model-alias-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   try {
     const data = formJson(form);
     data.makeDefault = form.elements.makeDefault.checked;
-    const oauthWindow = data.authType === "oauth" ? window.open("about:blank", "_blank") : null;
-    await api("/api/models/alias", { method: "POST", body: JSON.stringify(data) });
-    if (data.authType === "oauth") {
-      await startProviderOAuth(data.providerId, data.profileId || "default", oauthWindow);
+    if (data.providerId === "copilot" && !hasAuthProfile("copilot", "default")) {
+      throw new Error("Enable GitHub Copilot in Provider Setup before exposing Copilot models.");
+    }
+    try {
+      await api("/api/models/alias", { method: "POST", body: JSON.stringify(data) });
+    } catch (error) {
+      throw error;
     }
     form.reset();
     await refresh();
@@ -876,6 +1011,8 @@ document.querySelector("#provider-auth-form").addEventListener("submit", async (
       method: "POST",
       body: JSON.stringify(formJson(event.currentTarget)),
     });
+    providerModelOptions[result.providerId] = result.models || [];
+    syncAliasModelSuggestions();
     const heading = result.ok ? "Auth OK" : "Auth not testable";
     document.querySelector("#provider-auth-output").textContent =
       `${heading}. ${result.modelCount || 0} models available.\n${result.message || ""}\n${(result.models || []).join("\n")}`;
@@ -884,43 +1021,79 @@ document.querySelector("#provider-auth-form").addEventListener("submit", async (
   }
 });
 
-document.querySelector("#oauth-start-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const data = formJson(event.currentTarget);
-    await startProviderOAuth(data.providerId, data.profileId || "default");
-  } catch (error) {
-    document.querySelector("#oauth-output").textContent = error.message;
-  }
-});
-
 async function startProviderOAuth(providerId, profileId = "default", targetWindow = null) {
-  const result = await api("/api/oauth/start", {
-    method: "POST",
-    body: JSON.stringify({ providerId, profileId }),
-  });
+  let result;
+  try {
+    result = await api("/api/oauth/start", {
+      method: "POST",
+      body: JSON.stringify({ providerId, profileId }),
+    });
+  } catch (error) {
+    closeOAuthWindow(targetWindow);
+    throw error;
+  }
   if (result.status === "complete") {
-    document.querySelector("#oauth-output").textContent = `OAuth linked: ${result.providerId}:${result.profileId}\n${result.message || ""}`;
+    closeOAuthWindow(targetWindow);
+    setOAuthStatus(`OAuth linked: ${result.providerId}:${result.profileId}\n${result.message || ""}`);
     await refresh();
     return result;
   }
   const isDeviceLogin = result.userCode && result.state;
-  document.querySelector("#oauth-output").textContent = isDeviceLogin
-    ? `GitHub device login for ${result.providerId}:${result.profileId}\nOpen: ${result.authUrl}\nCode: ${result.userCode}\n\nWaiting for authorization...`
-    : `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`;
+  if (isDeviceLogin) {
+    await copyDeviceCodeToClipboard(result.userCode);
+  }
+  setOAuthStatus(isDeviceLogin
+    ? githubDeviceLoginMessage(result, { authUrl: result.authUrl, userCode: result.userCode })
+    : `Opening OAuth for ${result.providerId}:${result.profileId}\n${result.authUrl}\n\nCallback: ${result.redirectUri}`);
+  if (!result.authUrl) {
+    closeOAuthWindow(targetWindow);
+    throw new Error(result.message || `OAuth did not return a login URL for ${providerId}.`);
+  }
   if (targetWindow) {
     targetWindow.location.href = result.authUrl;
   } else {
     window.open(result.authUrl, "_blank", "noopener,noreferrer");
   }
   if (isDeviceLogin) {
-    await pollProviderOAuth(result.providerId, result.state, result.interval || 5);
+    await pollProviderOAuth(result.providerId, result.state, result.interval || 5, {
+      authUrl: result.authUrl,
+      userCode: result.userCode,
+    });
   }
   return result;
 }
 
-async function pollProviderOAuth(providerId, stateId, intervalSeconds = 5) {
-  const output = document.querySelector("#oauth-output");
+async function copyDeviceCodeToClipboard(userCode) {
+  if (!userCode) return;
+  try {
+    await navigator.clipboard.writeText(userCode);
+    alert(`GitHub device code copied to your clipboard:\n\n${userCode}\n\nPaste it into the GitHub authorization page.`);
+  } catch (_) {
+    alert(`Copy this GitHub device code:\n\n${userCode}\n\nPaste it into the GitHub authorization page.`);
+  }
+}
+
+function setOAuthStatus(message) {
+  const target = document.querySelector("#provider-setup-status") || document.querySelector("#provider-auth-output");
+  if (target) target.textContent = message;
+}
+
+function closeOAuthWindow(targetWindow) {
+  try {
+    if (targetWindow && !targetWindow.closed) targetWindow.close();
+  } catch (_) {
+    // Some browsers disallow script-closing a tab once it has navigated away.
+  }
+}
+
+function githubDeviceLoginMessage(result, loginInfo = {}) {
+  const authUrl = loginInfo.authUrl || result.authUrl || "https://github.com/login/device";
+  const userCode = loginInfo.userCode || result.userCode || "";
+  const codeLine = userCode ? `\nCode: ${userCode}` : "";
+  return `GitHub device login for ${result.providerId}:${result.profileId}\nOpen: ${authUrl}${codeLine}\n\nWaiting for authorization...`;
+}
+
+async function pollProviderOAuth(providerId, stateId, intervalSeconds = 5, loginInfo = {}) {
   let intervalMs = Math.max(3, Number(intervalSeconds || 5)) * 1000;
   const started = Date.now();
   while (Date.now() - started < 15 * 60 * 1000) {
@@ -930,29 +1103,15 @@ async function pollProviderOAuth(providerId, stateId, intervalSeconds = 5) {
       body: JSON.stringify({ providerId, state: stateId }),
     });
     if (result.status === "complete") {
-      output.textContent = `OAuth linked: ${result.providerId}:${result.profileId}`;
+      setOAuthStatus(`OAuth linked: ${result.providerId}:${result.profileId}`);
       await refresh();
       return result;
     }
     if (result.slowDown) intervalMs += 5000;
-    output.textContent = `Waiting for GitHub authorization for ${result.providerId}:${result.profileId}...`;
+    setOAuthStatus(githubDeviceLoginMessage(result, loginInfo));
   }
   throw new Error("GitHub device login timed out. Start OAuth again when you are ready.");
 }
-
-document.querySelector("#oauth-complete-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  try {
-    const result = await api("/api/oauth/complete", {
-      method: "POST",
-      body: JSON.stringify(formJson(event.currentTarget)),
-    });
-    document.querySelector("#oauth-output").textContent = `OAuth linked: ${result.providerId}:${result.profileId}`;
-    await refresh();
-  } catch (error) {
-    document.querySelector("#oauth-output").textContent = error.message;
-  }
-});
 
 document.querySelector("#diagnostics-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -976,13 +1135,5 @@ document.querySelector("#task-form").addEventListener("submit", async (event) =>
     alert(error.message);
   }
 });
-
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refresh().catch(() => {});
-});
-
-setInterval(() => {
-  if (!document.hidden) refresh().catch(() => {});
-}, 2500);
 
 refresh().catch((error) => alert(error.message));
