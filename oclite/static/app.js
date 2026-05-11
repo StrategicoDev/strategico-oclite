@@ -648,15 +648,55 @@ document.querySelector("#restart-gateway").addEventListener("click", async () =>
   const button = document.querySelector("#restart-gateway");
   button.disabled = true;
   button.textContent = "Restarting...";
+  let restartRequested = false;
   try {
     await api("/api/system/restart", { method: "POST", body: "{}" });
-    setTimeout(() => window.location.reload(), 1800);
+    restartRequested = true;
   } catch (error) {
-    alert(error.message);
-    button.disabled = false;
-    button.textContent = "Restart Gateway";
+    if (isLikelyRestartDisconnect(error)) {
+      restartRequested = true;
+    } else {
+      alert(error.message);
+      button.disabled = false;
+      button.textContent = "Restart Gateway";
+      return;
+    }
+  }
+  if (restartRequested) {
+    try {
+      await waitForGateway();
+      window.location.reload();
+    } catch (error) {
+      alert(error.message);
+      button.disabled = false;
+      button.textContent = "Restart Gateway";
+    }
   }
 });
+
+function isLikelyRestartDisconnect(error) {
+  const message = String((error && error.message) || error || "").toLowerCase();
+  return message.includes("fetch") || message.includes("network") || message.includes("failed to fetch");
+}
+
+async function waitForGateway(timeoutMs = 30000) {
+  const started = Date.now();
+  await sleep(900);
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch("/api/version", { cache: "no-store" });
+      if (response.ok) return;
+    } catch (_) {
+      // The server is expected to disappear briefly during restart.
+    }
+    await sleep(1000);
+  }
+  throw new Error("Gateway restart was requested, but the server did not come back within 30 seconds. Start OCLite from the terminal or enable startup on login.");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 document.querySelectorAll("[data-view-target]").forEach((tab) => {
   tab.addEventListener("click", () => showView(tab.dataset.viewTarget));
 });

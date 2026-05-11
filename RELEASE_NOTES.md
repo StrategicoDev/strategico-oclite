@@ -1,5 +1,11 @@
 # OCLite Release Notes
 
+## 0.2.8 - 2026-05-11
+
+- Made Restart Gateway tolerate the brief network disconnect during process restart and wait for the gateway to come back.
+- Added a Windows scheduled-task installer so OCLite can start automatically at login after a PC reboot.
+- Clarified that first startup after reboot must be handled by the operating system, not the in-browser restart button.
+
 ## 0.2.7 - 2026-05-11
 
 - Added the `/model` runtime command for Telegram and local sessions.
