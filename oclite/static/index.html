@@ -206,13 +206,19 @@
 
       <section class="view" data-view="models">
         <div class="grid model-setup">
-          <article>
-            <h2>1. Providers</h2>
-            <form id="provider-form" class="stack">
-              <input name="providerId" placeholder="provider id, e.g. openai" />
-              <input name="baseUrl" placeholder="base URL, optional" />
+          <article class="wide provider-panel">
+            <h2>Providers</h2>
+            <form id="provider-form" class="provider-add-row">
+              <input id="provider-id" name="providerId" list="provider-options" placeholder="provider id, e.g. openai-codex" />
+              <datalist id="provider-options"></datalist>
+              <input id="provider-base-url" name="baseUrl" placeholder="base URL" />
               <button>Add Provider</button>
             </form>
+            <small id="provider-verify-status">Choose a supported provider name.</small>
+            <div id="providers" class="provider-list"></div>
+          </article>
+
+          <article class="wide provider-actions">
             <form id="oauth-start-form" class="inline-form">
               <select name="providerId" id="oauth-provider"></select>
               <input name="profileId" type="hidden" value="default" />
@@ -234,7 +240,6 @@
               </form>
             </details>
             <div id="auth-profiles" class="list"></div>
-            <div id="providers" class="list"></div>
           </article>
 
           <article>

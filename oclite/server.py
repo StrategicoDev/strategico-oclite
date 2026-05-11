@@ -130,6 +130,7 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             "agents": agents,
             "sessions": sessions,
             "tasks": tasks,
+            "providerPresets": self.store.provider_presets(),
             "workspaceFiles": [
                 "AGENTS.md",
                 "SOUL.md",

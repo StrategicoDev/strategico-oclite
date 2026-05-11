@@ -249,19 +249,33 @@ function renderModels() {
 
 function renderProviders() {
   const providers = state.config.providers || {};
+  const presets = state.providerPresets || [];
+  document.querySelector("#provider-options").innerHTML = presets
+    .filter((preset) => preset.id !== "mock")
+    .map((preset) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name)}</option>`)
+    .join("");
   document.querySelector("#providers").innerHTML =
-    Object.entries(providers)
-      .map(([id, provider]) =>
-        item(`
-          <header><strong>${id}</strong><span class="pill">${provider.profileId ? "OAuth ready" : provider.apiKeyEnv || "provider"}</span></header>
-          <small>${provider.baseUrl || "https://api.openai.com/v1"}</small>
-        `)
-      )
-      .join("") || item("<small>No providers yet</small>");
+    presets
+      .map((preset) => {
+        const provider = providers[preset.id];
+        const configured = Boolean(provider) || preset.id === "mock";
+        return `
+          <div class="provider-row ${configured ? "configured" : ""}">
+            <div>
+              <strong>${escapeHtml(preset.name)}</strong>
+              <small>${escapeHtml(preset.id)} · ${escapeHtml(preset.description || "")}</small>
+            </div>
+            <small>${escapeHtml((provider && provider.baseUrl) || preset.baseUrl || "local")}</small>
+            <span class="pill">${configured ? "available" : "not added"}</span>
+          </div>
+        `;
+      })
+      .join("");
   const providerIds = Object.keys(providers);
   fillSelect("#auth-provider", providerIds, preferredSelectValue("#auth-provider", providerIds, "openai-codex"));
   fillSelect("#oauth-provider", providerIds, preferredSelectValue("#oauth-provider", providerIds, "openai-codex"));
   renderAuthProfiles();
+  validateProviderInput();
 }
 
 async function renderAuthProfiles() {
@@ -374,6 +388,34 @@ function syncAliasAuthFields() {
   const authType = document.querySelector("#alias-auth-type").value;
   document.querySelector("#alias-api-key").disabled = authType !== "api-key";
   document.querySelector("#alias-profile-id").disabled = authType !== "oauth";
+}
+
+function providerPreset(providerId) {
+  return (state.providerPresets || []).find((preset) => preset.id === providerId);
+}
+
+function validateProviderInput() {
+  const input = document.querySelector("#provider-id");
+  const baseUrl = document.querySelector("#provider-base-url");
+  const button = document.querySelector("#provider-form button");
+  const status = document.querySelector("#provider-verify-status");
+  const providerId = input.value.trim();
+  const preset = providerPreset(providerId);
+  if (!providerId) {
+    button.disabled = true;
+    status.textContent = "Choose a supported provider name.";
+    return;
+  }
+  if (!preset || providerId === "mock") {
+    button.disabled = true;
+    status.textContent = "Unsupported provider. Use openai or openai-codex.";
+    return;
+  }
+  if (!baseUrl.value.trim() && preset.baseUrl) {
+    baseUrl.value = preset.baseUrl;
+  }
+  button.disabled = false;
+  status.textContent = `${preset.name} verified. Base URL populated.`;
 }
 
 function renderTelegram() {
@@ -535,6 +577,7 @@ document.querySelector("#task-limit").addEventListener("change", (event) => {
 });
 document.querySelector("#alias-provider").addEventListener("change", syncAliasModelSelect);
 document.querySelector("#alias-auth-type").addEventListener("change", syncAliasAuthFields);
+document.querySelector("#provider-id").addEventListener("input", validateProviderInput);
 document.addEventListener("click", async (event) => {
   const row = event.target.closest("[data-task-select]");
   if (row) {

@@ -173,6 +173,50 @@ strong {
   margin-bottom: 14px;
 }
 
+.provider-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.provider-add-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.5fr) minmax(320px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.provider-list {
+  display: grid;
+  gap: 8px;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(240px, 0.8fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
+.provider-row.configured {
+  background: #f0fbfa;
+  border-color: #b7e4de;
+}
+
+.provider-actions {
+  display: grid;
+  gap: 12px;
+}
+
+.provider-actions form,
+.provider-actions pre {
+  margin-bottom: 0;
+}
+
 .advanced {
   margin-bottom: 14px;
   color: var(--muted);
@@ -490,6 +534,8 @@ pre {
   .task-row,
   .inline-form,
   .alias-form,
+  .provider-add-row,
+  .provider-row,
   .agent-selector-row,
   .task-form {
     grid-template-columns: 1fr;

@@ -26,6 +26,27 @@ DEFAULT_PROVIDERS = {
     },
 }
 
+PROVIDER_PRESETS = {
+    "mock": {
+        "name": "Mock",
+        "baseUrl": "",
+        "auth": "none",
+        "description": "Local echo provider for setup checks.",
+    },
+    "openai": {
+        "name": "OpenAI API",
+        "baseUrl": "https://api.openai.com/v1",
+        "auth": "api-key",
+        "description": "OpenAI-compatible API access with an API key.",
+    },
+    "openai-codex": {
+        "name": "OpenAI Codex OAuth",
+        "baseUrl": "https://api.openai.com/v1",
+        "auth": "oauth",
+        "description": "OpenAI Codex subscription access through OAuth.",
+    },
+}
+
 
 class Store:
     def __init__(self, home: Path | None = None):
@@ -103,6 +124,12 @@ class Store:
 
     def save_config(self, config: dict[str, Any]) -> None:
         self._write_config(config)
+
+    def provider_presets(self) -> list[dict[str, str]]:
+        return [
+            {"id": provider_id, **preset}
+            for provider_id, preset in PROVIDER_PRESETS.items()
+        ]
 
     def setup_dirs_only(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
@@ -377,11 +404,14 @@ class Store:
         provider_id = provider_id.strip()
         if not provider_id:
             raise ValueError("Provider id is required")
+        if provider_id not in PROVIDER_PRESETS or provider_id == "mock":
+            raise ValueError(f"Unsupported provider '{provider_id}'. Choose one of: openai, openai-codex")
         config = self.config()
         providers = config.setdefault("providers", {})
         existing = providers.get(provider_id, {})
+        preset = PROVIDER_PRESETS[provider_id]
         api_key_env = data.get("apiKeyEnv") or existing.get("apiKeyEnv") or f"{provider_id.upper()}_API_KEY"
-        base_url = data.get("baseUrl") or existing.get("baseUrl") or "https://api.openai.com/v1"
+        base_url = data.get("baseUrl") or existing.get("baseUrl") or preset.get("baseUrl") or "https://api.openai.com/v1"
         updated = {
             **existing,
             "apiKeyEnv": api_key_env,
