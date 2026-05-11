@@ -43,6 +43,7 @@ PROVIDER_PRESETS = {
         "name": "OpenAI Codex OAuth",
         "baseUrl": "https://api.openai.com/v1",
         "auth": "oauth",
+        "oauthSupported": True,
         "description": "OpenAI Codex subscription access through OAuth.",
     },
     "anthropic": {"name": "Anthropic", "baseUrl": "", "auth": "api-key", "description": "Direct provider activation name."},

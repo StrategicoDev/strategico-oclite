@@ -255,21 +255,27 @@ function renderProviders() {
       .map((preset) => {
         const provider = providers[preset.id];
         const configured = Boolean(provider) || preset.id === "mock";
+        const readiness = providerReadiness(preset, provider, configured);
         return `
           <div class="provider-row ${configured ? "configured" : ""}">
             <div>
               <strong>${escapeHtml(preset.name)}</strong>
               <small>${escapeHtml(preset.id)} · ${escapeHtml(preset.description || "")}</small>
             </div>
-            <small>${escapeHtml((provider && provider.baseUrl) || preset.baseUrl || "local")}</small>
-            <span class="pill">${configured ? "available" : "not added"}</span>
+            <small>${escapeHtml(readiness.detail)}</small>
+            <span class="pill">${escapeHtml(readiness.status)}</span>
           </div>
         `;
       })
       .join("");
   const providerIds = sortedConfiguredProviderIds();
+  const oauthIds = supportedOAuthProviderIds();
   fillSelect("#auth-provider", providerIds, preferredSelectValue("#auth-provider", providerIds, "openai-codex"));
-  fillSelect("#oauth-provider", providerIds, preferredSelectValue("#oauth-provider", providerIds, "openai-codex"));
+  fillSelect("#oauth-provider", oauthIds, preferredSelectValue("#oauth-provider", oauthIds, "openai-codex"));
+  document.querySelector("#oauth-start-form button").disabled = oauthIds.length === 0;
+  document.querySelector("#oauth-help").textContent = oauthIds.length
+    ? `OAuth connect is currently supported for: ${oauthIds.map(providerLabel).join(", ")}.`
+    : "No configured provider has a supported OAuth adapter yet.";
   renderAuthProfiles();
 }
 
@@ -369,6 +375,13 @@ function sortedConfiguredProviderIds() {
     .sort((a, b) => providerLabel(a).localeCompare(providerLabel(b)));
 }
 
+function supportedOAuthProviderIds() {
+  const configured = new Set(Object.keys(state.config.providers || {}));
+  return sortedProviderPresets()
+    .filter((preset) => preset.oauthSupported && configured.has(preset.id))
+    .map((preset) => preset.id);
+}
+
 function sortedProviderPresets() {
   return [...(state.providerPresets || [])]
     .filter((preset) => preset.id !== "github-copilot")
@@ -403,7 +416,7 @@ function syncAliasModelSuggestions() {
     .join("");
   const preset = providerPreset(providerId);
   document.querySelector("#model-provider-status").textContent = preset
-    ? `${preset.name} selected. Enter the exact model id you want agents to use.`
+    ? modelProviderStatus(preset)
     : "Choose a valid provider from the catalogue.";
 }
 
@@ -428,6 +441,26 @@ function providerPreset(providerId) {
 function providerLabel(providerId) {
   const preset = providerPreset(providerId);
   return preset ? preset.name : providerId;
+}
+
+function providerReadiness(preset, provider, configured) {
+  if (preset.id === "mock") {
+    return { status: "built in", detail: "local setup checks" };
+  }
+  if (!configured) {
+    return { status: "valid", detail: preset.baseUrl || "direct adapter pending" };
+  }
+  if (preset.id === "openai" || preset.id === "openai-codex" || provider.baseUrl || preset.baseUrl) {
+    return { status: "ready", detail: provider.baseUrl || preset.baseUrl };
+  }
+  return { status: "adapter pending", detail: "valid provider label, no runnable adapter yet" };
+}
+
+function modelProviderStatus(preset) {
+  if (preset.id === "openai" || preset.id === "openai-codex" || preset.baseUrl) {
+    return `${preset.name} selected. Enter the exact model id you want agents to use.`;
+  }
+  return `${preset.name} is a valid direct provider label, but its runnable adapter is not implemented in OCLite yet. You can save the alias for migration/reference, but active agents need a supported adapter before using it.`;
 }
 
 function renderTelegram() {
@@ -663,8 +696,9 @@ document.querySelector("#provider-auth-form").addEventListener("submit", async (
       method: "POST",
       body: JSON.stringify(formJson(event.currentTarget)),
     });
+    const heading = result.ok ? "Auth OK" : "Auth not testable";
     document.querySelector("#provider-auth-output").textContent =
-      `Auth OK. ${result.modelCount} models available.\n` + result.models.join("\n");
+      `${heading}. ${result.modelCount || 0} models available.\n${result.message || ""}\n${(result.models || []).join("\n")}`;
   } catch (error) {
     document.querySelector("#provider-auth-output").textContent = error.message;
   }

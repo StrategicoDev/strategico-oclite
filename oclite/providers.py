@@ -63,12 +63,16 @@ class ProviderRunner:
         base_url = provider_config.get("baseUrl", "").rstrip("/")
         if not base_url:
             return {
-                "ok": True,
+                "ok": False,
                 "providerId": provider_id,
                 "authType": provider_config.get("authType", "custom"),
                 "modelCount": 0,
                 "models": [],
-                "message": "Provider registered without a model-list endpoint.",
+                "message": (
+                    "This provider is in the valid catalogue, but OCLite does not have a runnable auth/test "
+                    "adapter for it yet. It can be exposed for migration/reference, but active agents need a "
+                    "supported adapter or an OpenAI-compatible base URL."
+                ),
             }
         credential = self._credential(provider_id, provider_config)
         if not credential:
