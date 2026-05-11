@@ -1,5 +1,10 @@
 # OCLite Release Notes
 
+## 0.2.9 - 2026-05-11
+
+- Added a simple Windows start script for manually launching the gateway without installing startup-on-login.
+- Added a `.cmd` wrapper for easier launch from Explorer or Command Prompt.
+
 ## 0.2.8 - 2026-05-11
 
 - Made Restart Gateway tolerate the brief network disconnect during process restart and wait for the gateway to come back.
