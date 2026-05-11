@@ -37,12 +37,14 @@ PROVIDER_PRESETS = {
         "name": "OpenAI API",
         "baseUrl": "https://api.openai.com/v1",
         "auth": "api-key",
+        "exposeSupported": True,
         "description": "OpenAI-compatible API access with an API key.",
     },
     "openai-codex": {
         "name": "OpenAI Codex OAuth",
         "baseUrl": "https://api.openai.com/v1",
         "auth": "oauth",
+        "exposeSupported": True,
         "oauthSupported": True,
         "description": "OpenAI Codex subscription access through OAuth.",
     },
@@ -519,6 +521,7 @@ class Store:
         if not model:
             raise ValueError("Model id is required")
         provider_id = self._canonical_provider_id(provider_id)
+        self._require_exposable_provider(provider_id)
         config = self.config()
         if provider_id != "mock" and provider_id not in config.get("providers", {}):
             self.save_provider(provider_id, {"providerId": provider_id})
@@ -543,6 +546,7 @@ class Store:
             raise ValueError("Provider is required")
         if not model:
             raise ValueError("Model is required")
+        self._require_exposable_provider(provider_id)
         self.save_model({"providerId": provider_id, "model": model})
         config = self.config()
         entry = {
@@ -620,6 +624,20 @@ class Store:
         if base_url:
             return "openai-compatible"
         return "direct"
+
+    def _require_exposable_provider(self, provider_id: str) -> None:
+        if provider_id == "mock":
+            return
+        preset = PROVIDER_PRESETS.get(provider_id)
+        if not preset or not preset.get("exposeSupported"):
+            valid = ", ".join(
+                sorted(
+                    preset["id"]
+                    for preset in self.provider_presets()
+                    if preset.get("exposeSupported")
+                )
+            )
+            raise ValueError(f"Provider '{provider_id}' is not ready for model exposure yet. Choose one of: {valid}")
 
     def _default_alias(self, provider_id: str, model: str) -> str:
         return f"{provider_id}-{model}".replace("/", "-").replace(":", "-")

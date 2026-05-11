@@ -249,7 +249,7 @@ function renderModels() {
 
 function renderProviders() {
   const providers = state.config.providers || {};
-  const presets = sortedProviderPresets();
+  const presets = exposableProviderPresets();
   document.querySelector("#providers").innerHTML =
     presets
       .map((preset) => {
@@ -363,9 +363,7 @@ function recentTurns(agent) {
 }
 
 function validProviderIds() {
-  return sortedProviderPresets()
-    .filter((preset) => preset.id !== "mock")
-    .map((preset) => preset.id);
+  return exposableProviderPresets().map((preset) => preset.id);
 }
 
 function sortedConfiguredProviderIds() {
@@ -377,9 +375,13 @@ function sortedConfiguredProviderIds() {
 
 function supportedOAuthProviderIds() {
   const configured = new Set(Object.keys(state.config.providers || {}));
-  return sortedProviderPresets()
+  return exposableProviderPresets()
     .filter((preset) => preset.oauthSupported && configured.has(preset.id))
     .map((preset) => preset.id);
+}
+
+function exposableProviderPresets() {
+  return sortedProviderPresets().filter((preset) => preset.exposeSupported);
 }
 
 function sortedProviderPresets() {
@@ -417,7 +419,7 @@ function syncAliasModelSuggestions() {
   const preset = providerPreset(providerId);
   document.querySelector("#model-provider-status").textContent = preset
     ? modelProviderStatus(preset)
-    : "Choose a valid provider from the catalogue.";
+    : "Choose an available provider.";
 }
 
 function syncAliasProviderDefaults() {
@@ -444,23 +446,14 @@ function providerLabel(providerId) {
 }
 
 function providerReadiness(preset, provider, configured) {
-  if (preset.id === "mock") {
-    return { status: "built in", detail: "local setup checks" };
-  }
   if (!configured) {
-    return { status: "valid", detail: preset.baseUrl || "direct adapter pending" };
+    return { status: "available", detail: preset.auth === "oauth" ? "OAuth" : "API key" };
   }
-  if (preset.id === "openai" || preset.id === "openai-codex" || provider.baseUrl || preset.baseUrl) {
-    return { status: "ready", detail: provider.baseUrl || preset.baseUrl };
-  }
-  return { status: "adapter pending", detail: "valid provider label, no runnable adapter yet" };
+  return { status: "ready", detail: provider.baseUrl || preset.baseUrl || preset.auth };
 }
 
 function modelProviderStatus(preset) {
-  if (preset.id === "openai" || preset.id === "openai-codex" || preset.baseUrl) {
-    return `${preset.name} selected. Enter the exact model id you want agents to use.`;
-  }
-  return `${preset.name} is a valid direct provider label, but its runnable adapter is not implemented in OCLite yet. You can save the alias for migration/reference, but active agents need a supported adapter before using it.`;
+  return `${preset.name} selected. Enter the exact model id you want agents to use.`;
 }
 
 function renderTelegram() {

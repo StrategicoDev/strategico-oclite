@@ -1,5 +1,11 @@
 # OCLite Release Notes
 
+## 0.2.4 - 2026-05-11
+
+- Reduced model setup to only show providers that OCLite can authenticate and run today.
+- Hid adapter-pending providers from the normal Expose Model workflow.
+- Added backend validation so non-ready providers cannot be exposed by accident.
+
 ## 0.2.3 - 2026-05-11
 
 - Limited the OAuth connect dropdown to providers with a real supported OAuth adapter.
