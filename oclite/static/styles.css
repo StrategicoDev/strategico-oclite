@@ -245,7 +245,7 @@ strong {
 .model-row,
 .empty-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.6fr) minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 0.6fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(150px, 0.7fr) auto;
   gap: 12px;
   align-items: center;
   min-height: 40px;
@@ -629,6 +629,21 @@ button.secondary:hover {
   background: #e9f6f4;
   color: var(--accent-dark);
   font-size: 12px;
+}
+
+.pill.ok {
+  background: #e6f7ed;
+  color: #166534;
+}
+
+.pill.warn {
+  background: #fff7ed;
+  color: var(--warn);
+}
+
+.compact-button {
+  min-height: 30px;
+  padding: 4px 10px;
 }
 
 .chips {

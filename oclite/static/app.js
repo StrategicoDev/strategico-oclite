@@ -5,6 +5,7 @@ let selectedTaskId = null;
 let refreshInFlight = false;
 let lastRefreshAt = null;
 let taskLimit = normalizeTaskLimit(localStorage.getItem("ocliteTaskLimit") || 25);
+let modelAuthStatus = {};
 
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -231,7 +232,7 @@ function renderModels() {
   const agentModels = agentModelChoices();
   const aliasRows = Object.values(aliases).map((alias) => renderModelAliasRow(alias, defaultModel)).join("");
   document.querySelector("#model-aliases").innerHTML = aliasRows
-    ? `<div class="model-row model-row-head"><span>Alias</span><span>Provider</span><span>Model</span><span>Auth</span><span>Status</span></div>${aliasRows}`
+    ? `<div class="model-row model-row-head"><span>Alias</span><span>Provider</span><span>Model</span><span>Auth</span><span>Status</span><span></span></div>${aliasRows}`
     : `<div class="empty-row">No exposed models yet</div>`;
   fillSelect("#agent-model", agentModels, defaultModel);
   fillSelect("#set-agent-model", agentModels, defaultModel);
@@ -248,15 +249,36 @@ function renderModelAliasRow(alias, defaultModel) {
     : alias.apiKeyEnv
       ? `env: ${alias.apiKeyEnv}`
       : auth;
+  const status = modelStatusForAlias(alias);
   return `
     <div class="model-row">
       <strong>${escapeHtml(alias.alias)}</strong>
       <span>${escapeHtml(alias.providerId)}</span>
       <span>${escapeHtml(alias.model)}</span>
       <span>${escapeHtml(credential)}</span>
-      <span>${alias.alias === defaultModel ? '<span class="pill">default</span>' : ""}</span>
+      <span title="${escapeHtml(status.message || "")}">
+        <span class="pill ${status.ok ? "ok" : "warn"}">${escapeHtml(status.label)}</span>
+        ${alias.alias === defaultModel ? '<span class="pill">default</span>' : ""}
+      </span>
+      <button class="secondary compact-button" data-model-test="${escapeHtml(alias.alias)}">Test</button>
     </div>
   `;
+}
+
+function modelStatusForAlias(alias) {
+  const tested = modelAuthStatus[alias.alias];
+  if (tested) return tested;
+  if ((alias.authType || "api-key") === "oauth") {
+    const profileId = alias.profileId || "default";
+    const linked = (state.authProfiles || []).some(
+      (profile) => profile.providerId === alias.providerId && profile.profileId === profileId
+    );
+    return linked ? { ok: true, label: "linked" } : { ok: false, label: "needs OAuth" };
+  }
+  if ((alias.authType || "api-key") === "none") {
+    return { ok: true, label: "ready" };
+  }
+  return alias.apiKeyEnv ? { ok: true, label: "configured" } : { ok: false, label: "needs key" };
 }
 
 function renderProviders() {
@@ -658,6 +680,11 @@ document.querySelector("#task-limit").addEventListener("change", (event) => {
 document.querySelector("#alias-provider").addEventListener("change", syncAliasProviderDefaults);
 document.querySelector("#alias-auth-type").addEventListener("change", syncAliasAuthFields);
 document.addEventListener("click", async (event) => {
+  const modelButton = event.target.closest("[data-model-test]");
+  if (modelButton) {
+    await testModelAlias(modelButton);
+    return;
+  }
   const row = event.target.closest("[data-task-select]");
   if (row) {
     selectedTaskId = row.dataset.taskSelect;
@@ -676,6 +703,29 @@ document.addEventListener("click", async (event) => {
   });
   await refresh();
 });
+
+async function testModelAlias(button) {
+  const alias = button.dataset.modelTest;
+  button.disabled = true;
+  button.textContent = "Testing...";
+  modelAuthStatus[alias] = { ok: false, label: "testing" };
+  renderModels();
+  try {
+    const result = await api("/api/models/test", {
+      method: "POST",
+      body: JSON.stringify({ alias }),
+    });
+    modelAuthStatus[alias] = {
+      ok: Boolean(result.ok),
+      label: result.status || (result.ok ? "ready" : "failed"),
+      message: result.message || "",
+    };
+  } catch (error) {
+    modelAuthStatus[alias] = { ok: false, label: "failed", message: error.message };
+  } finally {
+    renderModels();
+  }
+}
 
 wireForm("#agent-form", "/api/agents");
 wireForm("#workspace-form", "/api/agents/workspace");

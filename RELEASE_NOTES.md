@@ -1,5 +1,12 @@
 # OCLite Release Notes
 
+## 0.2.6 - 2026-05-11
+
+- Added per-exposed-model status in the Models list.
+- Added a Test button next to each exposed model alias.
+- Show OAuth-backed aliases as linked when their OAuth profile exists.
+- Added an alias-level model auth test endpoint.
+
 ## 0.2.5 - 2026-05-11
 
 - Made the Expose Model form more compact.

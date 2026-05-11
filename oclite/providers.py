@@ -96,6 +96,74 @@ class ProviderRunner:
         models = [item.get("id") for item in data.get("data", []) if item.get("id")]
         return {"ok": True, "providerId": provider_id, "modelCount": len(models), "models": models[:25]}
 
+    def test_model(self, model: str) -> dict[str, Any]:
+        ref = self._resolve_model_ref(model)
+        provider_config = self._provider_config(ref)
+        if ref.provider == "mock":
+            return {
+                "ok": True,
+                "status": "ready",
+                "alias": ref.alias or model,
+                "providerId": ref.provider,
+                "model": ref.model,
+                "message": "Mock provider is ready.",
+            }
+        profile = self._oauth_profile(ref.provider, provider_config)
+        if profile:
+            return {
+                "ok": True,
+                "status": "ready",
+                "alias": ref.alias or model,
+                "providerId": ref.provider,
+                "model": ref.model,
+                "authType": "oauth",
+                "message": f"OAuth profile '{profile.get('profileId', 'default')}' is linked.",
+            }
+        credential = self._credential(ref.provider, provider_config)
+        if not credential:
+            return {
+                "ok": False,
+                "status": "needs auth",
+                "alias": ref.alias or model,
+                "providerId": ref.provider,
+                "model": ref.model,
+                "message": f"Missing API key or OAuth profile for '{ref.provider}'.",
+            }
+        base_url = provider_config.get("baseUrl", "").rstrip("/")
+        if not base_url:
+            return {
+                "ok": False,
+                "status": "adapter pending",
+                "alias": ref.alias or model,
+                "providerId": ref.provider,
+                "model": ref.model,
+                "message": "Provider is configured but has no runnable endpoint yet.",
+            }
+        request = urllib.request.Request(
+            f"{base_url}/models",
+            headers=self._headers(credential, provider_config),
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=int(provider_config.get("timeoutSeconds", 60))) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            details = exc.read().decode("utf-8", errors="replace")
+            raise ProviderError(f"Model auth failed with HTTP {exc.code}: {details}") from exc
+        except urllib.error.URLError as exc:
+            raise ProviderError(f"Model auth network error: {exc.reason}") from exc
+        models = [item.get("id") for item in data.get("data", []) if item.get("id")]
+        return {
+            "ok": True,
+            "status": "ready",
+            "alias": ref.alias or model,
+            "providerId": ref.provider,
+            "model": ref.model,
+            "authType": "api-key",
+            "modelCount": len(models),
+            "message": "API key accepted.",
+        }
+
     def diagnostics(self, model: str) -> dict[str, Any]:
         ref = self._resolve_model_ref(model)
         provider_config = self._provider_config(ref)

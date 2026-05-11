@@ -94,6 +94,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/models/alias":
                 data = self.read_json()
                 return self.json_response(self.store.save_model_alias(data), 201)
+            if parsed.path == "/api/models/test":
+                return self.test_model()
             if parsed.path == "/api/providers":
                 return self.save_provider()
             if parsed.path == "/api/providers/auth":
@@ -137,6 +139,7 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             "app": self.app_metadata(),
             "providerPresets": self.store.provider_presets(),
             "modelPresets": self.store.model_presets(),
+            "authProfiles": AuthStore(self.store.home).list_profiles(),
             "workspaceFiles": [
                 "AGENTS.md",
                 "SOUL.md",
@@ -264,6 +267,14 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
     def auth_provider(self) -> None:
         data = self.read_json()
         result = ProviderRunner(self.store.config(), self.store.home).test_auth(data["providerId"])
+        self.json_response(result)
+
+    def test_model(self) -> None:
+        data = self.read_json()
+        model = data.get("model") or data.get("alias")
+        if not model:
+            raise ValueError("Model alias is required")
+        result = ProviderRunner(self.store.config(), self.store.home).test_model(model)
         self.json_response(result)
 
     def start_oauth(self) -> None:
