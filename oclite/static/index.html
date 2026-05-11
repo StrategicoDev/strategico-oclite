@@ -17,11 +17,23 @@
         </div>
       </div>
       <div class="header-actions">
+        <button id="version-badge" class="version-badge secondary">v0.0.0</button>
         <button id="update-gateway" class="secondary">Update</button>
         <button id="restart-gateway" class="secondary">Restart Gateway</button>
         <button id="refresh">Refresh</button>
       </div>
     </header>
+
+    <dialog id="release-dialog" class="release-dialog">
+      <header>
+        <div>
+          <h2>Release Notes</h2>
+          <small id="release-meta">OCLite</small>
+        </div>
+        <button id="close-release-dialog" class="secondary" type="button">Close</button>
+      </header>
+      <pre id="release-notes"></pre>
+    </dialog>
 
     <main>
       <nav class="tabs" aria-label="OCLite sections">

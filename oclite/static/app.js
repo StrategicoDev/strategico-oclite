@@ -39,6 +39,7 @@ function render() {
   document.querySelector("#session-count").textContent = state.sessions.length;
   document.querySelector("#task-count").textContent = (state.tasks || []).length;
   document.querySelector("#sender-count").textContent = state.config.telegram.allowlist.length;
+  renderAppMetadata();
 
   renderDashboard();
   renderModels();
@@ -49,6 +50,15 @@ function render() {
   renderSessions();
   renderWorkspaceFiles();
   showView(activeView);
+}
+
+function renderAppMetadata() {
+  const app = state.app || {};
+  const version = app.version || "0.0.0";
+  document.querySelector("#version-badge").textContent = `v${version}`;
+  const details = [app.name || "OCLite", app.branch, app.commit].filter(Boolean).join(" · ");
+  document.querySelector("#release-meta").textContent = details || `OCLite v${version}`;
+  document.querySelector("#release-notes").textContent = app.releaseNotes || "No release notes available.";
 }
 
 function renderDashboard() {
@@ -527,6 +537,17 @@ function wireForm(selector, path, transform) {
 }
 
 document.querySelector("#refresh").addEventListener("click", () => refresh().catch((error) => alert(error.message)));
+document.querySelector("#version-badge").addEventListener("click", () => {
+  const dialog = document.querySelector("#release-dialog");
+  if (dialog.showModal) {
+    dialog.showModal();
+  } else {
+    alert(document.querySelector("#release-notes").textContent);
+  }
+});
+document.querySelector("#close-release-dialog").addEventListener("click", () => {
+  document.querySelector("#release-dialog").close();
+});
 document.querySelector("#update-gateway").addEventListener("click", async () => {
   const button = document.querySelector("#update-gateway");
   button.disabled = true;

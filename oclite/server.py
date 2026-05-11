@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import threading
+import tomllib
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -23,6 +24,7 @@ STATIC_DIR = Path(__file__).parent / "static"
 class OCLiteHandler(SimpleHTTPRequestHandler):
     store = Store()
     runtime = AgentRuntime(store)
+    app_metadata_cache: dict | None = None
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
@@ -34,6 +36,8 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             return self.json_response(self.store.list_sessions())
         if parsed.path == "/api/tasks":
             return self.json_response(self.store.list_tasks())
+        if parsed.path == "/api/version":
+            return self.json_response(self.app_metadata())
         if parsed.path == "/api/auth/profiles":
             return self.json_response(AuthStore(self.store.home).list_profiles())
         if parsed.path == "/api/diagnostics/agent":
@@ -130,6 +134,7 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
             "agents": agents,
             "sessions": sessions,
             "tasks": tasks,
+            "app": self.app_metadata(),
             "providerPresets": self.store.provider_presets(),
             "workspaceFiles": [
                 "AGENTS.md",
@@ -144,6 +149,49 @@ class OCLiteHandler(SimpleHTTPRequestHandler):
                 "memory/",
             ],
         }
+
+    def app_metadata(self) -> dict:
+        if self.__class__.app_metadata_cache is not None:
+            return self.__class__.app_metadata_cache
+        root = Path(__file__).resolve().parents[1]
+        version = "0.0.0"
+        pyproject = root / "pyproject.toml"
+        if pyproject.exists():
+            try:
+                version = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {}).get("version", version)
+            except tomllib.TOMLDecodeError:
+                version = "0.0.0"
+        release_notes_path = root / "RELEASE_NOTES.md"
+        release_notes = release_notes_path.read_text(encoding="utf-8", errors="replace") if release_notes_path.exists() else ""
+        git = self.git_metadata(root)
+        metadata = {
+            "name": "OCLite",
+            "version": version,
+            "releaseNotes": release_notes,
+            **git,
+        }
+        self.__class__.app_metadata_cache = metadata
+        return metadata
+
+    def git_metadata(self, root: Path) -> dict:
+        if not (root / ".git").exists():
+            return {"branch": "", "commit": ""}
+        try:
+            branch = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "--abbrev-ref", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout.strip()
+            commit = subprocess.run(
+                ["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            ).stdout.strip()
+        except subprocess.SubprocessError:
+            return {"branch": "", "commit": ""}
+        return {"branch": branch, "commit": commit}
 
     def bind_agent(self) -> None:
         data = self.read_json()

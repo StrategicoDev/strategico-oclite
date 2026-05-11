@@ -46,8 +46,42 @@ body {
 .header-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.version-badge {
+  font-weight: 700;
+}
+
+.release-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.release-dialog::backdrop {
+  background: rgb(15 23 42 / 38%);
+}
+
+.release-dialog header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.release-dialog h2 {
+  margin-bottom: 4px;
+}
+
+.release-dialog pre {
+  max-height: 560px;
+  white-space: pre-wrap;
 }
 
 h1,
